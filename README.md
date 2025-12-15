@@ -622,6 +622,45 @@ Notes:
 - npm publishes use OIDC with provenance; no `NPM_TOKEN` secret is required.
 - Ensure your npm package settings add this GitHub repo as a trusted publisher and set the environment name to `npm-publish`.
 
+### Additional Utilities
+
+```typescript
+import {
+  calculateDiscount,
+  extractDomainWithoutSuffix,
+  generateStoreSlug,
+  genProductSlug,
+  detectShopCountry,
+} from 'shop-client';
+
+// Discount calculation (percentage, rounded to nearest integer)
+calculateDiscount(8000, 10000); // 20
+
+// Extract base domain without public suffix
+extractDomainWithoutSuffix('www.example.co.uk'); // 'example'
+
+// Create an SEO-friendly store slug
+generateStoreSlug('https://shop.example.com'); // 'shop-example-com'
+
+// Create a product slug from product data
+genProductSlug({
+  title: 'Summer Dress',
+  handle: 'summer-dress',
+  vendor: 'Acme',
+}); // 'acme-summer-dress'
+
+// Detect Shopify store country with confidence score
+const result = await detectShopCountry('anuki.in');
+// result.country → 'IN', result.confidence → 0.9
+```
+
+Notes:
+- `calculateDiscount` expects prices in the same unit (e.g., cents) and returns an integer percentage.
+- `extractDomainWithoutSuffix` removes known TLDs/suffixes, leaving the registrable label.
+- `generateStoreSlug` preserves domain components and replaces separators with hyphens.
+- `genProductSlug` builds a stable, vendor-prefixed slug using product fields.
+- `detectShopCountry` combines multiple signals to infer store country and confidence.
+
 ### Store Type Classification
 
 Determine the store’s primary verticals and target audiences using showcased products. Classification uses only each product’s `body_html` content and aggregates per-product results, optionally pruned by store-level signals.
@@ -656,6 +695,32 @@ Details:
 - Aggregates per-product audience/vertical into a multi-audience breakdown.
 - If `OPENROUTER_API_KEY` is absent or `OPENROUTER_OFFLINE=1`, uses offline regex heuristics.
 - Applies store-level pruning based on title/description to improve consistency.
+
+### AI Enrichment
+
+```typescript
+import { classifyProduct, generateSEOContent } from 'shop-client';
+
+// Classify a single product (offline or via OpenRouter when configured)
+const classification = await classifyProduct({
+  title: 'Organic Cotton T-Shirt',
+  bodyHtml: '<p>Soft, breathable cotton tee</p>',
+  tags: ['organic', 'cotton', 'unisex'],
+});
+// classification → { adult_unisex: { clothing: ['t-shirts'] } }
+
+// Generate basic SEO content for a product
+const seo = await generateSEOContent({
+  title: 'Organic Cotton T-Shirt',
+  description: 'Soft, breathable tee for everyday wear',
+  tags: ['organic', 'cotton', 'unisex'],
+});
+// seo.metaTitle, seo.metaDescription, seo.keywords
+```
+
+Notes:
+- `classifyProduct` mirrors the store-level classification logic but operates on a single product.
+- `generateSEOContent` produces lightweight, deterministic metadata suitable for catalogs and PDPs.
 
 ## 🏗️ Type Definitions
 

@@ -288,7 +288,7 @@ export function createStoreOperations(context: {
         const slug = generateStoreSlug(context.baseUrl);
 
         // Detect country information
-        const countryDetection = await detectShopifyCountry(html);
+        const countryDetection = await detectShopCountry(html);
 
         return {
           name: name || slug,

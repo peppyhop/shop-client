@@ -573,7 +573,7 @@ type MetaTag =
 
 ## Utility Functions
 
-### `detectShopifyCountry(domain: string): Promise<CountryDetectionResult>`
+### `detectShopCountry(domain: string): Promise<CountryDetectionResult>`
 
 Detects the country of a Shopify store based on various signals.
 
@@ -584,9 +584,9 @@ Detects the country of a Shopify store based on various signals.
 
 **Example:**
 ```typescript
-import { detectShopifyCountry } from 'shop-client';
+import { detectShopCountry } from 'shop-client';
 
-const result = await detectShopifyCountry('anuki.in');
+const result = await detectShopCountry('anuki.in');
 console.log(`Country: ${result.country}, Confidence: ${result.confidence}`);
 ```
 
@@ -671,6 +671,51 @@ import { ProductOperations } from 'shop-client';
 ```
 
 Keys in `variantOptionsMap` are normalized (`name#value` parts sorted alphabetically and joined by `##`).
+
+## AI Enrichment
+
+### `classifyProduct(input: { title?: string; bodyHtml?: string; tags?: string[]; vendor?: string; }): Promise<StoreTypeBreakdown>`
+
+Classifies a single product into audiences and verticals using offline heuristics or OpenRouter when configured.
+
+**Parameters:**
+- `title?: string`
+- `bodyHtml?: string`
+- `tags?: string[]`
+- `vendor?: string`
+
+**Returns:** `StoreTypeBreakdown`
+
+**Example:**
+```typescript
+import { classifyProduct } from 'shop-client';
+const breakdown = await classifyProduct({
+  title: 'Organic Cotton T-Shirt',
+  bodyHtml: '<p>Soft, breathable tee</p>',
+  tags: ['organic', 'cotton', 'unisex'],
+});
+```
+
+### `generateSEOContent(input: { title?: string; description?: string; tags?: string[]; }): Promise<{ metaTitle: string; metaDescription: string; keywords: string[] }>`
+
+Generates simple, deterministic SEO metadata for product pages.
+
+**Parameters:**
+- `title?: string`
+- `description?: string`
+- `tags?: string[]`
+
+**Returns:** Object with `metaTitle`, `metaDescription`, and `keywords`.
+
+**Example:**
+```typescript
+import { generateSEOContent } from 'shop-client';
+const seo = await generateSEOContent({
+  title: 'Organic Cotton T-Shirt',
+  description: 'Soft, breathable tee for everyday wear',
+  tags: ['organic', 'cotton', 'unisex'],
+});
+```
 
 ## Release & Publishing
 

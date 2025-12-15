@@ -10,6 +10,10 @@
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.ts"
     },
+    "./enrich": {
+      "import": "./dist/ai/enrich.mjs",
+      "types": "./dist/ai/enrich.d.ts"
+    },
     "./products": {
       "import": "./dist/products.mjs",
       "types": "./dist/products.d.ts"
@@ -29,6 +33,14 @@
     "./rate-limit": {
       "import": "./dist/utils/rate-limit.mjs",
       "types": "./dist/utils/rate-limit.d.ts"
+    },
+    "./func": {
+      "import": "./dist/utils/func.mjs",
+      "types": "./dist/utils/func.d.ts"
+    },
+    "./detect-country": {
+      "import": "./dist/utils/detect-country.mjs",
+      "types": "./dist/utils/detect-country.d.ts"
     }
   },
   "sideEffects": false,

@@ -1,7 +1,7 @@
 import { ShopClient } from "../index";
 
 jest.mock("../utils/detect-country", () => ({
-  detectShopifyCountry: jest.fn(async () => ({ country: "US" })),
+  detectShopCountry: jest.fn(async () => ({ country: "US" })),
 }));
 
 describe("ShopClient.getInfo parsing", () => {
@@ -20,14 +20,15 @@ describe("ShopClient.getInfo parsing", () => {
   `;
 
   beforeEach(() => {
-    global.fetch = jest.fn().mockResolvedValue({
+    const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
       text: async () => html,
-    }) as any;
+    }) as unknown as Response;
+    global.fetch = mockFetch as unknown as typeof fetch;
   });
 
   afterEach(() => {
-    (global.fetch as jest.Mock | undefined)?.mockReset();
+    (global.fetch as unknown as jest.Mock | undefined)?.mockReset();
   });
 
   test("normalizes protocol-relative social URLs and extracts contact links", async () => {

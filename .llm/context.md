@@ -236,7 +236,7 @@ Key type hierarchies:
 
 #### `detect-country.ts` - Country Detection
 
-**Function:** `detectShopifyCountry()`
+**Function:** `detectShopCountry()`
 
 **Algorithm:**
 - Currency analysis from product prices

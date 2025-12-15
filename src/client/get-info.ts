@@ -1,6 +1,6 @@
 import { unique } from "remeda";
 import type { StoreInfo } from "../store";
-import { detectShopifyCountry } from "../utils/detect-country";
+import { detectShopCountry } from "../utils/detect-country";
 import {
   extractDomainWithoutSuffix,
   generateStoreSlug,
@@ -179,7 +179,7 @@ export async function getInfoForStore(
 
   const slug = generateStoreSlug(baseUrl);
 
-  const countryDetection = await detectShopifyCountry(html);
+  const countryDetection = await detectShopCountry(html);
 
   const [homePageProductLinks, homePageCollectionLinks] = await Promise.all([
     validateLinksInBatches(
