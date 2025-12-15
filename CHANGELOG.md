@@ -1,3 +1,5 @@
+## [3.9.1](https://github.com/peppyhop/shop-client/compare/v3.9.0...v3.9.1) (2025-12-15)
+
 ## [3.9.0](https://github.com/peppyhop/shop-client/compare/v3.8.2...v3.9.0) (2025-12-05)
 
 ### Features
