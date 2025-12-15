@@ -1,3 +1,9 @@
+## [3.11.0](https://github.com/peppyhop/shop-client/compare/v3.10.0...v3.11.0) (2025-12-15)
+
+### Features
+
+* **ShopClient:** add timeout and showcase validation options ([#30](https://github.com/peppyhop/shop-client/issues/30)) ([9221469](https://github.com/peppyhop/shop-client/commit/9221469a92cd585fa35f96b2fe5617dab897daff))
+
 ## [3.10.0](https://github.com/peppyhop/shop-client/compare/v3.9.2...v3.10.0) (2025-12-15)
 
 ### Features
