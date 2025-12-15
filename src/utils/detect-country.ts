@@ -1,8 +1,4 @@
-import type {
-  CountryDetectionResult,
-  CountryScores,
-  ShopifyFeaturesData,
-} from "../types";
+import type { CountryDetectionResult, CountryScores } from "../types";
 
 const COUNTRY_CODES: Record<string, string> = {
   "+1": "US", // United States (primary) / Canada also uses +1
@@ -21,33 +17,6 @@ const COUNTRY_CODES: Record<string, string> = {
   "+62": "ID", // Indonesia
   "+92": "PK", // Pakistan
   "+7": "RU", // Russia
-};
-
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  Rs: "IN", // India
-  "₹": "IN", // India
-  $: "US", // United States (primary, though many countries use $)
-  CA$: "CA", // Canada
-  A$: "AU", // Australia
-  "£": "GB", // United Kingdom
-  "€": "EU", // European Union (not a country code, but commonly used)
-  AED: "AE", // United Arab Emirates
-  "₩": "KR", // South Korea
-  "¥": "JP", // Japan (primary, though China also uses ¥)
-};
-
-// Map currency symbols commonly found in Shopify money formats to ISO currency codes
-const CURRENCY_SYMBOL_TO_CODE: Record<string, string> = {
-  Rs: "INR",
-  "₹": "INR",
-  $: "USD",
-  CA$: "CAD",
-  A$: "AUD",
-  "£": "GBP",
-  "€": "EUR",
-  AED: "AED",
-  "₩": "KRW",
-  "¥": "JPY",
 };
 
 // Map Shopify currency codes to likely ISO country codes
@@ -109,60 +78,6 @@ export async function detectShopCountry(
 ): Promise<CountryDetectionResult> {
   const countryScores: CountryScores = {};
   let detectedCurrencyCode: string | undefined;
-
-  // 1️⃣ Extract Shopify features JSON
-  const shopifyFeaturesMatch = html.match(
-    /<script[^>]+id=["']shopify-features["'][^>]*>([\s\S]*?)<\/script>/
-  );
-  if (shopifyFeaturesMatch) {
-    try {
-      const json = shopifyFeaturesMatch[1];
-      if (!json) {
-        // no content in capture group; skip
-      } else {
-        const data: ShopifyFeaturesData = JSON.parse(json);
-        if (data.country)
-          scoreCountry(
-            countryScores,
-            data.country,
-            1,
-            "shopify-features.country"
-          );
-        if (data.locale?.includes("-")) {
-          const [, localeCountry] = data.locale.split("-");
-          if (localeCountry) {
-            scoreCountry(
-              countryScores,
-              localeCountry.toUpperCase(),
-              0.7,
-              "shopify-features.locale"
-            );
-          }
-        }
-        if (data.moneyFormat) {
-          for (const symbol in CURRENCY_SYMBOLS) {
-            if (data.moneyFormat.includes(symbol)) {
-              const iso =
-                CURRENCY_SYMBOLS[symbol as keyof typeof CURRENCY_SYMBOLS];
-              if (typeof iso === "string") {
-                scoreCountry(countryScores, iso, 0.6, "moneyFormat symbol");
-              }
-              // Also capture currency code if symbol is recognized
-              const code =
-                CURRENCY_SYMBOL_TO_CODE[
-                  symbol as keyof typeof CURRENCY_SYMBOL_TO_CODE
-                ];
-              if (!detectedCurrencyCode && typeof code === "string") {
-                detectedCurrencyCode = code;
-              }
-            }
-          }
-        }
-      }
-    } catch (_error) {
-      // Silently handle JSON parsing errors
-    }
-  }
 
   // 1️⃣ b) Detect Shopify.currency active code (common across many Shopify themes)
   // Example: Shopify.currency = {"active":"INR","rate":"1.0"};
