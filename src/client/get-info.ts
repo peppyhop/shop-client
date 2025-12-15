@@ -25,7 +25,8 @@ type Args = {
  * Returns the structured StoreInfo and detected currency code (if available).
  */
 export async function getInfoForStore(
-  args: Args
+  args: Args,
+  options?: { validateShowcase?: boolean; validationBatchSize?: number }
 ): Promise<{ info: StoreInfo; currencyCode?: string }> {
   const {
     baseUrl,
@@ -37,6 +38,7 @@ export async function getInfoForStore(
 
   const response = await rateLimitedFetch(baseUrl, {
     rateLimitClass: "store:info",
+    timeoutMs: 7000,
   });
   if (!response.ok) {
     throw new Error(`HTTP error! status: ${response.status}`);
@@ -125,21 +127,23 @@ export async function getInfoForStore(
     contactLinks.contactPage = match?.[1] || null;
   }
 
-  const extractedProductLinks =
+  const extractedProductLinks = unique(
     html
       .match(/href=["']([^"']*\/products\/[^"']+)["']/g)
       ?.map((match) =>
         match?.split("href=")[1]?.replace(/["']/g, "")?.split("/").at(-1)
       )
-      ?.filter(Boolean) || [];
+      ?.filter(Boolean) || []
+  ).slice(0, 8);
 
-  const extractedCollectionLinks =
+  const extractedCollectionLinks = unique(
     html
       .match(/href=["']([^"']*\/collections\/[^"']+)["']/g)
       ?.map((match) =>
         match?.split("href=")[1]?.replace(/["']/g, "")?.split("/").at(-1)
       )
-      ?.filter(Boolean) || [];
+      ?.filter(Boolean) || []
+  ).slice(0, 8);
 
   const headerLinks =
     html
@@ -181,20 +185,37 @@ export async function getInfoForStore(
 
   const countryDetection = await detectShopCountry(html);
 
-  const [homePageProductLinks, homePageCollectionLinks] = await Promise.all([
-    validateLinksInBatches(
-      extractedProductLinks.filter((handle): handle is string =>
-        Boolean(handle)
+  const doValidate = options?.validateShowcase === true;
+  let homePageProductLinks: string[] = [];
+  let homePageCollectionLinks: string[] = [];
+  if (doValidate) {
+    const batchSize = options?.validationBatchSize ?? 5;
+    const validated = await Promise.all([
+      validateLinksInBatches(
+        extractedProductLinks.filter((handle): handle is string =>
+          Boolean(handle)
+        ),
+        (handle) => validateProductExists(handle),
+        batchSize
       ),
-      (handle) => validateProductExists(handle)
-    ),
-    validateLinksInBatches(
-      extractedCollectionLinks.filter((handle): handle is string =>
-        Boolean(handle)
+      validateLinksInBatches(
+        extractedCollectionLinks.filter((handle): handle is string =>
+          Boolean(handle)
+        ),
+        (handle) => validateCollectionExists(handle),
+        batchSize
       ),
-      (handle) => validateCollectionExists(handle)
-    ),
-  ]);
+    ]);
+    homePageProductLinks = validated[0] ?? [];
+    homePageCollectionLinks = validated[1] ?? [];
+  } else {
+    homePageProductLinks = extractedProductLinks.filter(
+      (handle): handle is string => Boolean(handle)
+    );
+    homePageCollectionLinks = extractedCollectionLinks.filter(
+      (handle): handle is string => Boolean(handle)
+    );
+  }
 
   const info: StoreInfo = {
     name: name || slug,

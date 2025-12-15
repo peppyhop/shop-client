@@ -408,6 +408,7 @@ export class ShopClient {
       const response = await rateLimitedFetch(url, {
         method: "HEAD",
         rateLimitClass: "validate:product",
+        timeoutMs: 5000,
       });
       const exists = response.ok;
 
@@ -434,6 +435,7 @@ export class ShopClient {
       const response = await rateLimitedFetch(url, {
         method: "HEAD",
         rateLimitClass: "validate:collection",
+        timeoutMs: 5000,
       });
       const exists = response.ok;
 
@@ -531,7 +533,11 @@ export class ShopClient {
    *
    * @param options - `{ force?: boolean }` when `true`, ignores cached value and TTL.
    */
-  async getInfo(options?: { force?: boolean }): Promise<StoreInfo> {
+  async getInfo(options?: {
+    force?: boolean;
+    validateShowcase?: boolean;
+    validationBatchSize?: number;
+  }): Promise<StoreInfo> {
     try {
       // If force is requested, clear local cache to bypass freshness check
       if (options?.force === true) {
@@ -552,15 +558,22 @@ export class ShopClient {
       }
       // Create a single shared promise for the network request
       this.infoInFlight = (async () => {
-        const { info, currencyCode } = await getInfoForStore({
-          baseUrl: this.baseUrl,
-          storeDomain: this.storeDomain,
-          validateProductExists: (handle) => this.validateProductExists(handle),
-          validateCollectionExists: (handle) =>
-            this.validateCollectionExists(handle),
-          validateLinksInBatches: (items, validator, batchSize) =>
-            this.validateLinksInBatches(items, validator, batchSize),
-        });
+        const { info, currencyCode } = await getInfoForStore(
+          {
+            baseUrl: this.baseUrl,
+            storeDomain: this.storeDomain,
+            validateProductExists: (handle) =>
+              this.validateProductExists(handle),
+            validateCollectionExists: (handle) =>
+              this.validateCollectionExists(handle),
+            validateLinksInBatches: (items, validator, batchSize) =>
+              this.validateLinksInBatches(items, validator, batchSize),
+          },
+          {
+            validateShowcase: options?.validateShowcase === true,
+            validationBatchSize: options?.validationBatchSize,
+          }
+        );
         if (typeof currencyCode === "string") {
           this.storeCurrency = currencyCode;
         }
