@@ -87,7 +87,7 @@ class RateLimiter {
   }
 }
 
-let enabled = false;
+let enabled = true;
 const defaultOptions: RateLimitOptions = {
   maxRequestsPerInterval: 5, // 5 requests
   intervalMs: 1000, // per second
@@ -105,6 +105,7 @@ export type RateLimitedRequestInit = RequestInit & {
     baseDelayMs?: number; // initial backoff delay
     retryOnStatuses?: number[]; // HTTP statuses to retry (defaults: 429, 503)
   };
+  timeoutMs?: number;
 };
 
 function getHost(input: RequestInfo | URL): string | undefined {
@@ -215,6 +216,18 @@ export async function rateLimitedFetch(
   input: RequestInfo | URL,
   init?: RateLimitedRequestInit
 ): Promise<Response> {
+  const timeoutMs = Math.max(0, init?.timeoutMs ?? 0);
+  let controller: AbortController | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const hasSignal = !!init?.signal;
+  if (timeoutMs > 0 && !hasSignal) {
+    controller = new AbortController();
+    timer = setTimeout(() => controller?.abort(), timeoutMs);
+  }
+  const effInit: RateLimitedRequestInit = {
+    ...init,
+    signal: hasSignal ? init?.signal : controller?.signal,
+  };
   const klass = init?.rateLimitClass;
   const byClass = klass ? classLimiters.get(klass) : undefined;
   const byHost = getHostLimiter(getHost(input));
@@ -231,9 +244,9 @@ export async function rateLimitedFetch(
   while (attempt <= maxRetries) {
     try {
       if (eff) {
-        response = await eff.schedule(() => fetch(input as any, init));
+        response = await eff.schedule(() => fetch(input as any, effInit));
       } else {
-        response = await fetch(input as any, init);
+        response = await fetch(input as any, effInit);
       }
       // If OK or not a retriable status, return immediately
       if (
@@ -241,6 +254,7 @@ export async function rateLimitedFetch(
         response.ok ||
         !retryOnStatuses.includes(response.status)
       ) {
+        if (timer) clearTimeout(timer);
         return response as Response;
       }
     } catch (err) {
@@ -251,12 +265,26 @@ export async function rateLimitedFetch(
     // If we got here, we will retry if attempts remain
     attempt += 1;
     if (attempt > maxRetries) break;
-    const jitter = Math.floor(Math.random() * 100);
-    const delay = baseDelayMs * 2 ** (attempt - 1) + jitter;
+    let delay =
+      baseDelayMs * 2 ** (attempt - 1) + Math.floor(Math.random() * 100);
+    const retryAfter = response?.headers?.get("retry-after");
+    if (retryAfter) {
+      const asNumber = Number(retryAfter);
+      if (!Number.isNaN(asNumber) && asNumber >= 0) {
+        delay = Math.max(delay, Math.floor(asNumber * 1000));
+      } else {
+        const parsed = Date.parse(retryAfter);
+        if (!Number.isNaN(parsed)) {
+          const until = parsed - Date.now();
+          if (until > 0) delay = Math.max(delay, until);
+        }
+      }
+    }
     await sleep(delay);
   }
 
   // If we have a response (non-ok retriable status) return it; otherwise throw last error
+  if (timer) clearTimeout(timer);
   if (response) return response;
   throw lastError ?? new Error("rateLimitedFetch failed without response");
 }

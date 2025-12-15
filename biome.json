@@ -47,7 +47,13 @@
         "noArrayIndexKey": "off",
         "noExplicitAny": "off",
         "noShadowRestrictedNames": "off",
-        "useNamespaceKeyword": "off"
+        "useNamespaceKeyword": "off",
+        "noConsole": {
+          "level": "error",
+          "options": {
+            "allow": ["assert", "error", "info", "warn"]
+          }
+        }
       },
       "security": {
         "noDangerouslySetInnerHtml": "off"
@@ -81,12 +87,14 @@
       "!**/node_modules",
       "!**/node_modules",
       "!**/docs",
+      "!**/examples",
       "!**/.sst",
       "!**/.open-next",
       "!**/.next",
       "!**/dist",
       "!**/build",
       "!**/bin",
+      "!**/scripts",
       "!**/infra",
       "!**/sst.config.ts",
       "!**/sst-env.d.ts",

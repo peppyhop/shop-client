@@ -20,4 +20,5 @@ export default defineConfig({
   clean: true,
   sourcemap: false,
   minify: false,
+  external: ["tldts", "turndown"]
 });

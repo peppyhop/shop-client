@@ -12,9 +12,10 @@
   "theme": "default",
   "tsconfig": "tsconfig.json",
   "exclude": ["**/*.test.ts", "examples/**"],
-  "excludeExternals": false,
-  "excludePrivate": false,
-  "excludeProtected": false,
+  "excludeExternals": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
   "searchInComments": true,
   "categorizeByGroup": false
 }
