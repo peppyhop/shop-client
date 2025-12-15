@@ -19,6 +19,35 @@ const COUNTRY_CODES: Record<string, string> = {
   "+7": "RU", // Russia
 };
 
+const CURRENCY_JSON_RE = /Shopify\.currency\s*=\s*(\{[^}]*\})/i;
+const CURRENCY_ACTIVE_ASSIGN_RE =
+  /Shopify\.currency\.active\s*=\s*['"]([A-Za-z]{3})['"]/i;
+const SHOPIFY_COUNTRY_RE = /Shopify\.country\s*=\s*['"]([A-Za-z]{2})['"]/i;
+const JSON_LD_RE =
+  /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+const TEL_HREF_RE = /href=["']tel:([^"']+)["']/gi;
+const COUNTRY_NAME_TO_ISO: Record<string, string> = {
+  india: "IN",
+  "united states": "US",
+  canada: "CA",
+  australia: "AU",
+  "united kingdom": "GB",
+  britain: "GB",
+  uk: "GB",
+  japan: "JP",
+  "south korea": "KR",
+  korea: "KR",
+  germany: "DE",
+  france: "FR",
+  italy: "IT",
+  spain: "ES",
+  brazil: "BR",
+  russia: "RU",
+  singapore: "SG",
+  indonesia: "ID",
+  pakistan: "PK",
+};
+
 // Map Shopify currency codes to likely ISO country codes
 // Note: Some codes (e.g., USD, EUR) are used by multiple countries; we treat them as signals.
 const CURRENCY_CODE_TO_COUNTRY: Record<string, string> = {
@@ -44,6 +73,14 @@ function scoreCountry(
     countryScores[country] = { score: 0, reasons: [] };
   countryScores[country].score += weight;
   countryScores[country].reasons.push(reason);
+}
+
+function currentConfidence(countryScores: CountryScores): number {
+  const sorted = Object.entries(countryScores).sort(
+    (a, b) => b[1].score - a[1].score
+  );
+  const best = sorted[0];
+  return best ? Math.min(1, best[1].score / 2) : 0;
 }
 
 /**
@@ -82,7 +119,7 @@ export async function detectShopCountry(
   // 1️⃣ b) Detect Shopify.currency active code (common across many Shopify themes)
   // Example: Shopify.currency = {"active":"INR","rate":"1.0"};
   // Fallback pattern: Shopify.currency.active = 'INR';
-  const currencyJsonMatch = html.match(/Shopify\.currency\s*=\s*(\{[^}]*\})/);
+  const currencyJsonMatch = html.match(CURRENCY_JSON_RE);
   if (currencyJsonMatch) {
     try {
       const raw = currencyJsonMatch[1];
@@ -101,9 +138,7 @@ export async function detectShopCountry(
       // ignore malformed objects
     }
   } else {
-    const currencyActiveAssignMatch = html.match(
-      /Shopify\.currency\.active\s*=\s*['"]([A-Za-z]{3})['"]/i
-    );
+    const currencyActiveAssignMatch = html.match(CURRENCY_ACTIVE_ASSIGN_RE);
     if (currencyActiveAssignMatch) {
       const captured = currencyActiveAssignMatch[1];
       const code =
@@ -120,9 +155,7 @@ export async function detectShopCountry(
 
   // 1️⃣ c) Detect explicit Shopify.country assignment
   // Example: Shopify.country = "IN";
-  const shopifyCountryMatch = html.match(
-    /Shopify\.country\s*=\s*['"]([A-Za-z]{2})['"]/i
-  );
+  const shopifyCountryMatch = html.match(SHOPIFY_COUNTRY_RE);
   if (shopifyCountryMatch) {
     const captured = shopifyCountryMatch[1];
     const iso =
@@ -131,6 +164,32 @@ export async function detectShopCountry(
       // Treat as strongest signal
       scoreCountry(countryScores, iso, 1, "Shopify.country");
     }
+  }
+
+  if (currentConfidence(countryScores) >= 0.9) {
+    const sorted = Object.entries(countryScores).sort(
+      (a, b) => b[1].score - a[1].score
+    );
+    const best = sorted[0];
+    return {
+      country: best![0],
+      confidence: Math.min(1, best![1].score / 2),
+      signals: best![1].reasons,
+      currencyCode: detectedCurrencyCode,
+    };
+  }
+
+  const telMatches = html.matchAll(TEL_HREF_RE);
+  for (const m of telMatches) {
+    const tel = m[1] ?? "";
+    const prefix = tel.match(/^\+\d{1,3}/)?.[0];
+    if (prefix && COUNTRY_CODES[prefix])
+      scoreCountry(
+        countryScores,
+        COUNTRY_CODES[prefix],
+        0.8,
+        `phone prefix ${prefix}`
+      );
   }
 
   // 2️⃣ Extract phone numbers
@@ -149,8 +208,7 @@ export async function detectShopCountry(
   }
 
   // 3️⃣ Extract JSON-LD addressCountry fields
-  const jsonLdRegex = /<script[^>]+application\/ld\+json[^>]*>(.*?)<\/script>/g;
-  let jsonLdMatch: RegExpExecArray | null = jsonLdRegex.exec(html);
+  let jsonLdMatch: RegExpExecArray | null = JSON_LD_RE.exec(html);
   while (jsonLdMatch !== null) {
     try {
       const json = jsonLdMatch[1];
@@ -190,8 +248,10 @@ export async function detectShopCountry(
     } catch (_error) {
       // Silently handle JSON parsing errors
     }
-    // advance to next match
-    jsonLdMatch = jsonLdRegex.exec(html);
+    if (currentConfidence(countryScores) >= 0.9)
+      // advance to next match
+      break;
+    jsonLdMatch = JSON_LD_RE.exec(html);
   }
 
   // 4️⃣ Footer country mentions - now using ISO codes
@@ -199,30 +259,7 @@ export async function detectShopCountry(
   if (footerMatch) {
     const footerTextGroup = footerMatch[1];
     const footerText = footerTextGroup ? footerTextGroup.toLowerCase() : "";
-    // Create a mapping of country names to ISO codes for footer detection
-    const countryNameToISO: Record<string, string> = {
-      india: "IN",
-      "united states": "US",
-      canada: "CA",
-      australia: "AU",
-      "united kingdom": "GB",
-      britain: "GB",
-      uk: "GB",
-      japan: "JP",
-      "south korea": "KR",
-      korea: "KR",
-      germany: "DE",
-      france: "FR",
-      italy: "IT",
-      spain: "ES",
-      brazil: "BR",
-      russia: "RU",
-      singapore: "SG",
-      indonesia: "ID",
-      pakistan: "PK",
-    };
-
-    for (const [countryName, isoCode] of Object.entries(countryNameToISO)) {
+    for (const [countryName, isoCode] of Object.entries(COUNTRY_NAME_TO_ISO)) {
       if (footerText.includes(countryName))
         scoreCountry(countryScores, isoCode, 0.4, "footer mention");
     }
