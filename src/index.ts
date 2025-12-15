@@ -626,10 +626,22 @@ export type { CollectionOperations } from "./collections";
 // Export operation interfaces
 export type { ProductOperations } from "./products";
 export type { StoreInfo, StoreOperations } from "./store";
-// Export all types for external use
-// Classification utility
-export type * from "./types";
-export { detectShopifyCountry } from "./utils/detect-country";
+// Export selected types for external use (excluding Shopify-prefixed types)
+export type {
+  Collection,
+  CountryDetectionResult,
+  CountryScores,
+  CurrencyCode,
+  LocalizedPricing,
+  MetaTag,
+  Product,
+  ProductImage,
+  ProductOption,
+  ProductVariant,
+  ProductVariantImage,
+  StoreTypeBreakdown,
+} from "./types";
+export { detectStoreCountry } from "./utils/detect-country";
 // Export utility functions
 export {
   calculateDiscount,

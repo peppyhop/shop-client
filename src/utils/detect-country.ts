@@ -104,7 +104,7 @@ function scoreCountry(
  * console.log(result.signals); // ["shopify-features.country", "phone prefix +1"]
  * ```
  */
-export async function detectShopifyCountry(
+export async function detectStoreCountry(
   html: string
 ): Promise<CountryDetectionResult> {
   const countryScores: CountryScores = {};

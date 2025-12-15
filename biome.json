@@ -80,6 +80,7 @@
       "**",
       "!**/node_modules",
       "!**/node_modules",
+      "!**/docs",
       "!**/.sst",
       "!**/.open-next",
       "!**/.next",

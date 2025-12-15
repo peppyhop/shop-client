@@ -5,7 +5,11 @@
     "src/products.ts",
     "src/collections.ts",
     "src/checkout.ts",
-    "src/store.ts"
+    "src/store.ts",
+    "src/utils/rate-limit.ts",
+    "src/utils/func.ts",
+    "src/utils/detect-country.ts",
+    "src/ai/enrich.ts"
   ],
   "out": "docs",
   "plugin": ["typedoc-plugin-markdown"],

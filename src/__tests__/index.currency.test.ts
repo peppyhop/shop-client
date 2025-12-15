@@ -1,7 +1,7 @@
 import { ShopClient } from "../index";
 
 jest.mock("../utils/detect-country", () => ({
-  detectShopifyCountry: jest.fn(async () => ({
+  detectStoreCountry: jest.fn(async () => ({
     country: "US",
     currencyCode: "USD",
   })),
@@ -11,7 +11,7 @@ describe("Currency propagation and formatting", () => {
   const baseUrl = "https://examplestore.com/";
 
   beforeEach(() => {
-    (global.fetch as any) = jest.fn(async (input: any) => {
+    const mockFetch = jest.fn(async (input: any) => {
       const url = typeof input === "string" ? input : input?.url ?? "";
 
       // getInfo root HTML
@@ -299,7 +299,8 @@ describe("Currency propagation and formatting", () => {
       }
 
       return { ok: false, status: 404, statusText: "Not Found" } as any;
-    });
+    }) as unknown as typeof fetch;
+    global.fetch = mockFetch;
   });
 
   afterEach(() => {

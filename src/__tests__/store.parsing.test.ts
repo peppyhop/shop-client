@@ -1,7 +1,7 @@
 import { createStoreOperations } from "../store";
 
 jest.mock("../utils/detect-country", () => ({
-  detectShopifyCountry: jest.fn(async () => ({ country: "US" })),
+  detectStoreCountry: jest.fn(async () => ({ country: "US" })),
 }));
 
 describe("StoreOperations.info parsing", () => {
@@ -20,14 +20,15 @@ describe("StoreOperations.info parsing", () => {
   `;
 
   beforeEach(() => {
-    global.fetch = jest.fn().mockResolvedValue({
+    const mockFetch = jest.fn().mockResolvedValue({
       ok: true,
       text: async () => html,
-    }) as any;
+    }) as unknown as Response;
+    global.fetch = mockFetch as unknown as typeof fetch;
   });
 
   afterEach(() => {
-    (global.fetch as jest.Mock | undefined)?.mockReset();
+    (global.fetch as unknown as jest.Mock | undefined)?.mockReset();
   });
 
   test("parses social links including protocol-relative and normalizes to https", async () => {
