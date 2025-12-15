@@ -1,3 +1,9 @@
+## [3.10.0](https://github.com/peppyhop/shop-client/compare/v3.9.2...v3.10.0) (2025-12-15)
+
+### Features
+
+* enhance country detection and rate limiting ([#29](https://github.com/peppyhop/shop-client/issues/29)) ([193b94c](https://github.com/peppyhop/shop-client/commit/193b94ce864369c76a3d79bd69573a807d33816d))
+
 ## [3.9.2](https://github.com/peppyhop/shop-client/compare/v3.9.1...v3.9.2) (2025-12-15)
 
 ## [3.9.1](https://github.com/peppyhop/shop-client/compare/v3.9.0...v3.9.1) (2025-12-15)
