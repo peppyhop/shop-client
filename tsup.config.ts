@@ -14,6 +14,7 @@ export default defineConfig({
   ],
   outDir: "dist",
   format: ["esm"],
+  outExtension: ({ format }) => ({ js: format === "esm" ? ".mjs" : ".js" }),
   dts: true,
   splitting: true,
   clean: true,
