@@ -1,7 +1,7 @@
 import { ShopClient } from "../index";
 
 jest.mock("../utils/detect-country", () => ({
-  detectStoreCountry: jest.fn(async () => ({
+  detectShopCountry: jest.fn(async () => ({
     country: "US",
     currencyCode: "USD",
   })),

@@ -641,7 +641,7 @@ export type {
   ProductVariantImage,
   StoreTypeBreakdown,
 } from "./types";
-export { detectStoreCountry } from "./utils/detect-country";
+export { detectShopCountry } from "./utils/detect-country";
 // Export utility functions
 export {
   calculateDiscount,

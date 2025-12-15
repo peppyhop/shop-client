@@ -1,7 +1,7 @@
 import { createStoreOperations } from "../store";
 
 jest.mock("../utils/detect-country", () => ({
-  detectStoreCountry: jest.fn(async () => ({ country: "US" })),
+  detectShopCountry: jest.fn(async () => ({ country: "US" })),
 }));
 
 describe("StoreOperations.info parsing", () => {

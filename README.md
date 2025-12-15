@@ -630,7 +630,7 @@ import {
   extractDomainWithoutSuffix,
   generateStoreSlug,
   genProductSlug,
-  detectStoreCountry,
+  detectShopCountry,
 } from 'shop-client';
 
 // Discount calculation (percentage, rounded to nearest integer)
@@ -650,7 +650,7 @@ genProductSlug({
 }); // 'acme-summer-dress'
 
 // Detect Shopify store country with confidence score
-const result = await detectStoreCountry('anuki.in');
+const result = await detectShopCountry('anuki.in');
 // result.country → 'IN', result.confidence → 0.9
 ```
 
@@ -659,7 +659,7 @@ Notes:
 - `extractDomainWithoutSuffix` removes known TLDs/suffixes, leaving the registrable label.
 - `generateStoreSlug` preserves domain components and replaces separators with hyphens.
 - `genProductSlug` builds a stable, vendor-prefixed slug using product fields.
-- `detectStoreCountry` combines multiple signals to infer store country and confidence.
+- `detectShopCountry` combines multiple signals to infer store country and confidence.
 
 ### Store Type Classification
 

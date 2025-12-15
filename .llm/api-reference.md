@@ -573,7 +573,7 @@ type MetaTag =
 
 ## Utility Functions
 
-### `detectStoreCountry(domain: string): Promise<CountryDetectionResult>`
+### `detectShopCountry(domain: string): Promise<CountryDetectionResult>`
 
 Detects the country of a Shopify store based on various signals.
 
@@ -584,9 +584,9 @@ Detects the country of a Shopify store based on various signals.
 
 **Example:**
 ```typescript
-import { detectStoreCountry } from 'shop-client';
+import { detectShopCountry } from 'shop-client';
 
-const result = await detectStoreCountry('anuki.in');
+const result = await detectShopCountry('anuki.in');
 console.log(`Country: ${result.country}, Confidence: ${result.confidence}`);
 ```
 
