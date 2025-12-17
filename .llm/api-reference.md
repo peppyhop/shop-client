@@ -144,6 +144,30 @@ const breakdown = await shop.determineStoreType({
 
 Access via `shop.products`
 
+### predictiveSearch(query: string, options?)
+
+Locale-aware Shopify Ajax predictive search for products.
+- `limit` clamps to 1–10 (default 10)
+- `locale` defaults to `en`; falls back to non-locale on 404/417
+- `unavailableProducts` defaults to `hide`
+- Applies optional `currency` override to returned products
+
+```typescript
+const results = await shop.products.predictiveSearch("dress", { limit: 10, locale: "en" });
+```
+
+### recommendations(productId: number, options?)
+
+Product recommendations for a given product ID.
+- `intent`: `related` (default) or `complementary`
+- `limit`: 1–10 (default 10)
+- `locale`: defaults to `en`
+- Applies optional `currency` override
+
+```typescript
+const recos = await shop.products.recommendations(1234567890, { intent: "related", limit: 6 });
+```
+
 ### all()
 
 ```typescript
@@ -503,6 +527,7 @@ type StoreInfo = {
   jsonLdData?: any;
   techProvider: string;
   country: string;
+  currency: string;
 };
 ```
 

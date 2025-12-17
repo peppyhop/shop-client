@@ -59,6 +59,7 @@ async function getStoreDetails() {
   console.log(`Domain: ${storeInfo.domain}`);
   console.log(`Description: ${storeInfo.description}`);
   console.log(`Country: ${storeInfo.country || 'Unknown'}`);
+  console.log(`Currency: ${storeInfo.currency || 'Unknown'}`);
   
   // Social links
   if (Object.keys(storeInfo.socialLinks).length > 0) {
@@ -161,6 +162,63 @@ async function getProductsByPriceRange(shop: ShopClient, minPrice: number, maxPr
 // Usage
 const affordableProducts = await getProductsByPriceRange(shop, 10, 50);
 console.log(`Found ${affordableProducts.length} products between $10-$50`);
+```
+
+### Predictive Search
+
+```typescript
+import { ShopClient } from 'shop-client';
+
+async function predictiveProductSearch() {
+  const shop = new ShopClient('anuki.in');
+  await shop.getInfo();
+
+  const results = await shop.products.predictiveSearch('dress', {
+    limit: 10,
+    locale: 'en',
+    currency: 'USD',
+  });
+
+  if (!results || results.length === 0) {
+    console.log('No predictive results');
+    return;
+  }
+
+  results.forEach(p => {
+    console.log(`${p.title} (${p.handle}) - ${p.currency}`);
+  });
+}
+
+predictiveProductSearch();
+```
+
+### Product Recommendations
+
+```typescript
+import { ShopClient } from 'shop-client';
+
+async function productRecommendations(productId: number) {
+  const shop = new ShopClient('anuki.in');
+  await shop.getInfo();
+
+  const recos = await shop.products.recommendations(productId, {
+    limit: 6,
+    intent: 'related',
+    locale: 'en',
+    currency: 'USD',
+  });
+
+  if (!recos || recos.length === 0) {
+    console.log('No recommendations');
+    return;
+  }
+
+  recos.forEach(p => {
+    console.log(`${p.title} (${p.handle}) - ${p.currency}`);
+  });
+}
+
+productRecommendations(1234567890);
 ```
 
 ## Advanced Usage Examples

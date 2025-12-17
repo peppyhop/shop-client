@@ -1,4 +1,4 @@
-# Contributing to Shop Search
+# Contributing to Shop Client
 
 Thank you for your interest in contributing to the `shop-client` library! This document provides guidelines and information for contributors.
 
