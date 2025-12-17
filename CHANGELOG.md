@@ -1,3 +1,9 @@
+## [3.13.0](https://github.com/peppyhop/shop-client/compare/v3.12.0...v3.13.0) (2025-12-17)
+
+### Features
+
+* add predictive search and recommendations functionality ([#32](https://github.com/peppyhop/shop-client/issues/32)) ([e98e68d](https://github.com/peppyhop/shop-client/commit/e98e68d5983e7e349c577e46bef34d741d0f501d))
+
 ## [3.12.0](https://github.com/peppyhop/shop-client/compare/v3.11.0...v3.12.0) (2025-12-17)
 
 ### Features
