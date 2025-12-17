@@ -6,6 +6,7 @@ import type {
   Product,
   ProductClassification,
   SEOContent,
+  ShopifyPredictiveProductSearch,
   ShopifyProduct,
   ShopifySingleProduct,
 } from "./types";
@@ -74,6 +75,32 @@ export interface ProductOperations {
    * Creates a filter map of variant options and their distinct values from all products.
    */
   filter(): Promise<Record<string, string[]> | null>;
+
+  /**
+   * Predictive product search using Shopify Ajax API.
+   */
+  predictiveSearch(
+    query: string,
+    options?: {
+      limit?: number;
+      locale?: string;
+      currency?: CurrencyCode;
+      unavailableProducts?: "show" | "hide" | "last";
+    }
+  ): Promise<Product[]>;
+
+  /**
+   * Product recommendations for a given product ID using Shopify Ajax API.
+   */
+  recommendations(
+    productId: number,
+    options?: {
+      limit?: number;
+      intent?: "related" | "complementary";
+      locale?: string;
+      currency?: CurrencyCode;
+    }
+  ): Promise<Product[] | null>;
 }
 
 /**
@@ -633,6 +660,116 @@ export function createProductOperations(
         console.error("Failed to create product filters:", storeDomain, error);
         throw error;
       }
+    },
+
+    predictiveSearch: async (
+      query: string,
+      options?: {
+        limit?: number;
+        locale?: string;
+        currency?: CurrencyCode;
+        unavailableProducts?: "show" | "hide" | "last";
+      }
+    ): Promise<Product[]> => {
+      if (!query || typeof query !== "string") {
+        throw new Error("Query is required and must be a string");
+      }
+      const limit = Math.max(1, Math.min(options?.limit ?? 10, 10));
+      const unavailable =
+        options?.unavailableProducts === "show" ||
+        options?.unavailableProducts === "hide"
+          ? options.unavailableProducts
+          : "hide";
+      const localeValue = (options?.locale && options.locale.trim()) || "en";
+      const localePrefix = `${localeValue.replace(/^\/|\/$/g, "")}/`;
+      const url =
+        `${baseUrl}${localePrefix}search/suggest.json` +
+        `?q=${encodeURIComponent(query)}` +
+        `&resources[type]=product` +
+        `&resources[limit]=${limit}` +
+        `&resources[options][unavailable_products]=${unavailable}`;
+
+      const response = await rateLimitedFetch(url, {
+        rateLimitClass: "search:predictive",
+        timeoutMs: 7000,
+        retry: { maxRetries: 2, baseDelayMs: 300 },
+      });
+      let resp = response;
+      if (!resp.ok && (resp.status === 404 || resp.status === 417)) {
+        const fallbackUrl =
+          `${baseUrl}search/suggest.json` +
+          `?q=${encodeURIComponent(query)}` +
+          `&resources[type]=product` +
+          `&resources[limit]=${limit}` +
+          `&resources[options][unavailable_products]=${unavailable}`;
+        resp = await rateLimitedFetch(fallbackUrl, {
+          rateLimitClass: "search:predictive",
+          timeoutMs: 7000,
+          retry: { maxRetries: 2, baseDelayMs: 300 },
+        });
+      }
+      if (!resp.ok) {
+        // Common error statuses: 417 (language), 422 (invalid params), 429 (throttle), 5xx
+        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      }
+      const data = (await resp.json()) as ShopifyPredictiveProductSearch;
+      const raw = data?.resources?.results?.products ?? [];
+      const handles = raw
+        .filter((p: any) => Boolean(p?.available ?? true))
+        .map((p: any) => String(p?.handle ?? ""))
+        .filter((h: string) => h.length > 0)
+        .slice(0, limit);
+      const fetched = await Promise.all(handles.map((h) => findProduct(h)));
+      const results = filter(fetched, isNonNullish);
+      const finalProducts =
+        maybeOverrideProductsCurrency(results, options?.currency) ?? [];
+      return finalProducts;
+    },
+
+    recommendations: async (
+      productId: number,
+      options?: {
+        limit?: number;
+        intent?: "related" | "complementary";
+        locale?: string;
+        currency?: CurrencyCode;
+      }
+    ): Promise<Product[] | null> => {
+      if (!Number.isFinite(productId) || productId <= 0) {
+        throw new Error("Valid productId is required");
+      }
+      const limit = Math.max(1, Math.min(options?.limit ?? 10, 10));
+      const intent =
+        options?.intent === "complementary" ? "complementary" : "related";
+      const localeValue = (options?.locale && options.locale.trim()) || "en";
+      const localePrefix = `${localeValue.replace(/^\/|\/$/g, "")}/`;
+      const url =
+        `${baseUrl}${localePrefix}recommendations/products.json` +
+        `?product_id=${encodeURIComponent(String(productId))}` +
+        `&limit=${limit}` +
+        `&intent=${intent}`;
+
+      const resp = await rateLimitedFetch(url, {
+        rateLimitClass: "products:recommendations",
+        timeoutMs: 7000,
+        retry: { maxRetries: 2, baseDelayMs: 300 },
+      });
+      if (!resp.ok) {
+        if (resp.status === 404) {
+          return [];
+        }
+        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      }
+      const data = await resp.json();
+      const productsArray: ShopifyProduct[] = Array.isArray(data)
+        ? (data as ShopifyProduct[])
+        : Array.isArray((data as any)?.products)
+          ? ((data as any).products as ShopifyProduct[])
+          : [];
+      const normalized = productsDto(productsArray) || [];
+      const finalProducts =
+        maybeOverrideProductsCurrency(normalized, options?.currency) ?? [];
+      return finalProducts;
     },
   };
 

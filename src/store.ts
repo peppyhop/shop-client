@@ -1,5 +1,9 @@
 import { getInfoForStore } from "./client/get-info";
-import type { CountryDetectionResult, JsonLdEntry } from "./types";
+import type {
+  CountryDetectionResult,
+  CurrencyCode,
+  JsonLdEntry,
+} from "./types";
 
 /**
  * Store operations interface for managing store-related functionality.
@@ -38,6 +42,7 @@ export interface StoreInfo {
     subDomain: string | null;
   };
   country: CountryDetectionResult["country"];
+  currency: CurrencyCode | null;
 }
 
 /**

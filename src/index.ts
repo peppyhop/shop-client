@@ -514,6 +514,7 @@ export class ShopClient {
    * - `jsonLdData` - Structured data from JSON-LD scripts
    * - `techProvider` - Shopify-specific information (walletId, subDomain)
    * - `country` - Country detection results with ISO 3166-1 alpha-2 codes (e.g., "US", "GB")
+   * - `currency` - ISO 4217 currency code inferred from store (e.g., "USD")
    *
    * @throws {Error} When the store URL is unreachable or returns an error
    *
