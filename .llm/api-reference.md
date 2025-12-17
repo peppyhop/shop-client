@@ -60,6 +60,7 @@ async getInfo(options?: { force?: boolean }): Promise<StoreInfo | null>
 ```
 
 Fetches comprehensive store information including metadata, social links, and featured content.
+Validates the URL is a Shopify store; throws an Error if validation fails.
 
 Caching:
 - Results are cached per `ShopClient` instance.

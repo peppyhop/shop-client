@@ -8,6 +8,7 @@ function makeHtml(name: string): string {
         <meta name="og:site_name" content="${name}">
         <meta name="description" content="A great store">
         <meta property="og:image" content="https://cdn.example.com/logo.png">
+        <meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog">
       </head>
       <body>
         <h1>${name}</h1>
@@ -117,6 +118,7 @@ describe("getInfo() caching and concurrency", () => {
         <head>
           <title>Example Shop</title>
           <meta name="og:site_name" content="Example Shop" />
+          <meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog">
         </head>
         <body></body>
       </html>`;

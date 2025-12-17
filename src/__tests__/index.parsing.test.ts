@@ -10,6 +10,7 @@ describe("ShopClient.getInfo parsing", () => {
   const html = `
     <meta name="og:site_name" content="Example Store">
     <meta name="description" content="An example description">
+    <meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog">
     <a href="//instagram.com/example">Instagram</a>
     <a href="https://www.twitter.com/example">Twitter</a>
     <a href="https://www.linkedin.com/company/example/">LinkedIn</a>

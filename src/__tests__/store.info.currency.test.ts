@@ -18,7 +18,8 @@ describe("getInfo returns currency along with country", () => {
       if (url === baseUrl) {
         return {
           ok: true,
-          text: async () => "<html><head></head><body></body></html>",
+          text: async () =>
+            '<html><head><meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog"></head><body></body></html>',
         } as any;
       }
       return { ok: false, status: 404, statusText: "Not Found" } as any;

@@ -16,7 +16,11 @@ describe("Handle redirect resolution", () => {
 
       // getInfo root HTML
       if (url === baseUrl) {
-        return { ok: true, text: async () => "<html></html>" } as any;
+        return {
+          ok: true,
+          text: async () =>
+            '<html><meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog"></html>',
+        } as any;
       }
 
       // Product HTML redirect: old-handle -> new-handle

@@ -53,6 +53,22 @@ export async function getInfoForStore(
     return match ? match[1] : null;
   };
 
+  const shopifyWalletId = getMetaTag("shopify-digital-wallet")?.split("/")[1];
+
+  const isShopifyStore =
+    html.includes("cdn.shopify.com") ||
+    html.includes("myshopify.com") ||
+    html.includes("shopify-digital-wallet") ||
+    html.includes("Shopify.shop") ||
+    html.includes("Shopify.currency") ||
+    html.includes("shopify-section");
+
+  if (!isShopifyStore || !shopifyWalletId) {
+    throw new Error(
+      "The provided URL does not appear to be a valid Shopify store."
+    );
+  }
+
   const getPropertyMetaTag = (property: string) => {
     const regex = new RegExp(
       `<meta[^>]*property=["']${property}["'][^>]*content=["'](.*?)["']`
@@ -66,8 +82,6 @@ export async function getInfoForStore(
   const title = getMetaTag("og:title") ?? getMetaTag("twitter:title");
   const description =
     getMetaTag("description") || getPropertyMetaTag("og:description");
-
-  const shopifyWalletId = getMetaTag("shopify-digital-wallet")?.split("/")[1];
 
   const myShopifySubdomainMatch = html.match(/['"](.*?\.myshopify\.com)['"]/);
   const myShopifySubdomain = myShopifySubdomainMatch
@@ -241,7 +255,7 @@ export async function getInfoForStore(
         )
         ?.map((json) => (json ? JSON.parse(json) : null)) || [],
     techProvider: {
-      name: "shopify",
+      name: shopifyWalletId ? "shopify" : "",
       walletId: shopifyWalletId,
       subDomain: myShopifySubdomain ?? null,
     },

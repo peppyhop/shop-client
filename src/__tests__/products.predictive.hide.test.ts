@@ -17,7 +17,11 @@ describe("products.predictiveSearch hides unavailable and fetches via find", () 
       const url = typeof input === "string" ? input : input?.url ?? "";
       // getInfo HTML
       if (url === baseUrl) {
-        return { ok: true, text: async () => "<html></html>" } as any;
+        return {
+          ok: true,
+          text: async () =>
+            '<html><meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog"></html>',
+        } as any;
       }
       // Predictive search response (locale-aware)
       if (url.startsWith(`${baseUrl}en/search/suggest.json`)) {
