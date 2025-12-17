@@ -1,3 +1,9 @@
+## [3.14.0](https://github.com/peppyhop/shop-client/compare/v3.13.0...v3.14.0) (2025-12-17)
+
+### Features
+
+* **validation:** add shopify store url validation in getInfo ([#33](https://github.com/peppyhop/shop-client/issues/33)) ([0ff1444](https://github.com/peppyhop/shop-client/commit/0ff1444df53189249a34c4a42805fb1fc6156f36))
+
 ## [3.13.0](https://github.com/peppyhop/shop-client/compare/v3.12.0...v3.13.0) (2025-12-17)
 
 ### Features
