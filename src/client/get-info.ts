@@ -246,6 +246,7 @@ export async function getInfoForStore(
       subDomain: myShopifySubdomain ?? null,
     },
     country: countryDetection.country,
+    currency: (countryDetection as any)?.currencyCode || null,
   };
 
   const currencyCode = (countryDetection as any)?.currencyCode;
