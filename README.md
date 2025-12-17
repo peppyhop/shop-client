@@ -1,4 +1,4 @@
-# Shop Search
+# Shop Client
 
 [![npm version](https://badge.fury.io/js/shop-client.svg)](https://badge.fury.io/js/shop-client)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
@@ -205,17 +205,8 @@ Notes:
 
 ### Migration: Barrel → Subpath Imports
 
-#### Package Rename: `shop-search` → `shop-client` (v3.8.2)
-- Install: `npm i shop-client` (replaces `shop-search`)
-- Update imports to `shop-client` (API unchanged)
-
 TypeScript:
 ```ts
-// Before (pre-rename: shop-search)
-import { Store } from 'shop-search';
-const store = new Store("your-store.myshopify.com");
-
-// After (post-rename: shop-client v3.8.2+)
 import { ShopClient } from 'shop-client';
 const client = new ShopClient("your-store.myshopify.com");
 ```
@@ -354,6 +345,8 @@ const storeInfo = await shop.getInfo();
 - `headerLinks`: Navigation menu links
 - `showcase`: Featured products and collections
 - `jsonLdData`: Structured data from the store
+- `country`: ISO 3166-1 alpha-2 code (e.g., `US`, `GB`)
+- `currency`: ISO 4217 currency code (e.g., `USD`, `EUR`)
 
 ### Products
 
@@ -443,6 +436,43 @@ Object.entries(filters || {}).forEach(([optionName, values]) => {
 - Returns lowercase, unique values for consistency
 - Handles products with multiple variant options
 - Returns empty object `{}` if no products have variants
+
+### Predictive Search
+
+#### `products.predictiveSearch(query, options?)`
+
+Locale-aware Shopify Ajax predictive search for products.
+
+```typescript
+const results = await shop.products.predictiveSearch("dress", {
+  limit: 10,           // clamps 1–10
+  locale: "en",        // defaults to "en"
+  // unavailableProducts defaults to "hide"
+  currency: "USD",     // optional override
+});
+```
+
+- Hides unavailable items by default
+- Extracts handles from Ajax results, fetches full products via `find`
+- Falls back to non-locale path when locale returns 404/417
+
+### Recommendations
+
+#### `products.recommendations(productId, options?)`
+
+Shopify Ajax product recommendations for a given product.
+
+```typescript
+const recos = await shop.products.recommendations(1234567890, {
+  limit: 6,                 // clamps 1–10 (default 10)
+  intent: "related",        // or "complementary" (default: related)
+  locale: "en",             // defaults to "en"
+  currency: "USD",          // optional override
+});
+```
+
+- Returns normalized `Product[]`
+- Locale-aware endpoint `/{locale}/recommendations/products.json`
 
 ### Collections
 

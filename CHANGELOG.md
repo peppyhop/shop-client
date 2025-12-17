@@ -212,13 +212,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### **Class Name Change**
 ```typescript
-// Before (pre-rename: shop-search)
-import { Store } from 'shop-search';
-const store = new Store "your-store.myshopify.com";
-
-// After (post-rename: shop-client v3.8.2+)
 import { ShopClient } from 'shop-client';
-const client = new ShopClient "your-store.myshopify.com";
+const client = new ShopClient("your-store.myshopify.com");
 ```
 
 #### **Product Operations**
@@ -272,13 +267,13 @@ const checkoutUrl = await client.checkout.create([
 - Basic product data normalization
 - Simple TypeScript type definitions
 
-### API Structure (pre-rename: shop-search)
+### API Structure
 ```typescript
-class Store {
+class ShopClient {
   products: {
-    all(): Promise<Product[]>
-    paginated(options): Promise<Product[]>
-    find(handle: string): Promise<Product>
+    all(): Promise<Product[] | null>
+    paginated(options): Promise<Product[] | null>
+    find(handle: string): Promise<Product | null>
   }
 }
 ```
