@@ -31,8 +31,9 @@
 
 ## 🧠 Store Info Caching & Concurrency
 
-`getInfo()` uses time-based caching and in-flight request deduping to avoid redundant network calls:
+`getInfo()` validates the store URL and uses time-based caching and in-flight request deduping to avoid redundant network calls:
 
+- Validation: Ensures the URL points to a valid Shopify store (checks for specific meta tags and scripts). Throws an error if invalid.
 - Cache window: `5 minutes` (`cacheExpiry`). Fresh cached results return immediately.
   - You can configure this TTL via the `ShopClient` constructor option `cacheTTL` (milliseconds).
 - Cached fields: `infoCacheValue` (last `StoreInfo`) and `infoCacheTimestamp` (last fetch time).

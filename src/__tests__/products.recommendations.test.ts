@@ -66,7 +66,11 @@ describe("products.recommendations", () => {
     const mockFetch = jest.fn(async (input: any) => {
       const url = typeof input === "string" ? input : input?.url ?? "";
       if (url === baseUrl) {
-        return { ok: true, text: async () => "<html></html>" } as any;
+        return {
+          ok: true,
+          text: async () =>
+            '<html><meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog"></html>',
+        } as any;
       }
       if (url.startsWith(`${baseUrl}en/recommendations/products.json`)) {
         return {
