@@ -1,15 +1,15 @@
 import { determineStoreTypeForStore } from "./ai/determine-store-type";
 import type { CheckoutOperations } from "./checkout";
 import { createCheckoutOperations } from "./checkout";
-import { getInfoForStore } from "./client/get-info";
+import { getInfoForShop } from "./client/get-info";
 import type { CollectionOperations } from "./collections";
 import { createCollectionOperations } from "./collections";
 import { collectionsDto as dtoCollections } from "./dto/collections.dto";
 import { mapProductDto, mapProductsDto } from "./dto/products.mapped";
 import type { ProductOperations } from "./products";
 import { createProductOperations } from "./products";
-import type { StoreInfo, StoreOperations } from "./store";
-import { createStoreOperations } from "./store";
+import type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
+import { createShopOperations } from "./store";
 import type {
   Collection,
   Product,
@@ -50,15 +50,18 @@ export class ShopClient {
   private cacheTimestamps: Map<string, number> = new Map();
   private normalizeImageUrlCache: Map<string, string> = new Map();
   private storeCurrency?: string;
-  private infoCacheValue?: StoreInfo;
+  private infoCacheValue?: ShopInfo;
   private infoCacheTimestamp?: number;
-  private infoInFlight?: Promise<StoreInfo>;
+  private infoInFlight?: Promise<ShopInfo>;
+  private metaCacheValue?: OpenGraphMeta;
+  private metaCacheTimestamp?: number;
+  private metaInFlight?: Promise<OpenGraphMeta>;
 
   // Public operations interfaces
   public products: ProductOperations;
   public collections: CollectionOperations;
   public checkout: CheckoutOperations;
-  public storeOperations: StoreOperations;
+  public shopOperations: ShopOperations;
 
   /**
    * Creates a new ShopClient instance for interacting with a Shopify store.
@@ -151,7 +154,7 @@ export class ShopClient {
     }
 
     // Initialize operations
-    this.storeOperations = createStoreOperations({
+    this.shopOperations = createShopOperations({
       baseUrl: this.baseUrl,
       storeDomain: this.storeDomain,
       validateProductExists: this.validateProductExists.bind(this),
@@ -538,7 +541,7 @@ export class ShopClient {
     force?: boolean;
     validateShowcase?: boolean;
     validationBatchSize?: number;
-  }): Promise<StoreInfo> {
+  }): Promise<ShopInfo> {
     try {
       // If force is requested, clear local cache to bypass freshness check
       if (options?.force === true) {
@@ -559,16 +562,19 @@ export class ShopClient {
       }
       // Create a single shared promise for the network request
       this.infoInFlight = (async () => {
-        const { info, currencyCode } = await getInfoForStore(
+        const { info, currencyCode } = await getInfoForShop(
           {
             baseUrl: this.baseUrl,
             storeDomain: this.storeDomain,
-            validateProductExists: (handle) =>
+            validateProductExists: (handle: string) =>
               this.validateProductExists(handle),
-            validateCollectionExists: (handle) =>
+            validateCollectionExists: (handle: string) =>
               this.validateCollectionExists(handle),
-            validateLinksInBatches: (items, validator, batchSize) =>
-              this.validateLinksInBatches(items, validator, batchSize),
+            validateLinksInBatches: (
+              items: any[],
+              validator: (item: any) => Promise<boolean>,
+              batchSize?: number
+            ) => this.validateLinksInBatches(items, validator, batchSize),
           },
           {
             validateShowcase: options?.validateShowcase === true,
@@ -608,6 +614,67 @@ export class ShopClient {
   }
 
   /**
+   * Fetch OpenGraph metadata from the store homepage.
+   * Returns only `og:*` fields without additional parsing or validation.
+   */
+  async getMetaData(options?: { force?: boolean }): Promise<OpenGraphMeta> {
+    try {
+      if (options?.force === true) {
+        this.metaCacheValue = undefined;
+        this.metaCacheTimestamp = undefined;
+      }
+      if (
+        this.metaCacheValue &&
+        this.metaCacheTimestamp !== undefined &&
+        Date.now() - this.metaCacheTimestamp < this.cacheExpiry
+      ) {
+        return this.metaCacheValue;
+      }
+      if (this.metaInFlight) {
+        return await this.metaInFlight;
+      }
+      this.metaInFlight = (async () => {
+        const meta = await this.shopOperations.getMetaData();
+        this.metaCacheValue = meta;
+        this.metaCacheTimestamp = Date.now();
+        return meta;
+      })();
+      try {
+        const result = await this.metaInFlight;
+        return result;
+      } finally {
+        this.metaInFlight = undefined;
+      }
+    } catch (error: unknown) {
+      throw this.handleFetchError(
+        error,
+        "fetching store metadata",
+        this.baseUrl
+      );
+    }
+  }
+
+  async getJsonLd() {
+    try {
+      return await this.shopOperations.getJsonLd();
+    } catch (error: unknown) {
+      throw this.handleFetchError(
+        error,
+        "fetching store JSON-LD",
+        this.baseUrl
+      );
+    }
+  }
+
+  async getHeaderLinks(): Promise<string[]> {
+    try {
+      return await this.shopOperations.getHeaderLinks();
+    } catch (error: unknown) {
+      throw this.handleFetchError(error, "fetching header links", this.baseUrl);
+    }
+  }
+
+  /**
    * Determine the store's primary vertical and target audience.
    * Uses `getInfo()` internally; no input required.
    */
@@ -639,7 +706,7 @@ export type { CheckoutOperations } from "./checkout";
 export type { CollectionOperations } from "./collections";
 // Export operation interfaces
 export type { ProductOperations } from "./products";
-export type { StoreInfo, StoreOperations } from "./store";
+export type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
 // Export selected types for external use (excluding Shopify-prefixed types)
 export type {
   Collection,

@@ -1,5 +1,5 @@
 import { filter, isNonNullish } from "remeda";
-import type { StoreInfo } from "./store";
+import type { ShopInfo } from "./store";
 import type {
   Collection,
   CurrencyCode,
@@ -83,7 +83,7 @@ export function createCollectionOperations(
     collectionHandle: string,
     options?: { page?: number; limit?: number }
   ) => Promise<Product[] | null>,
-  getStoreInfo: () => Promise<StoreInfo>,
+  getStoreInfo: () => Promise<ShopInfo>,
   findCollection: (handle: string) => Promise<Collection | null>
 ): CollectionOperations {
   // Use shared formatter from utils

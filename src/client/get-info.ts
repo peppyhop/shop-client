@@ -1,5 +1,5 @@
 import { unique } from "remeda";
-import type { StoreInfo } from "../store";
+import type { ShopInfo } from "../store";
 import { detectShopCountry } from "../utils/detect-country";
 import {
   extractDomainWithoutSuffix,
@@ -24,10 +24,10 @@ type Args = {
  * Fetches comprehensive store information including metadata, social links, and showcase content.
  * Returns the structured StoreInfo and detected currency code (if available).
  */
-export async function getInfoForStore(
+export async function getInfoForShop(
   args: Args,
   options?: { validateShowcase?: boolean; validationBatchSize?: number }
-): Promise<{ info: StoreInfo; currencyCode?: string }> {
+): Promise<{ info: ShopInfo; currencyCode?: string }> {
   const {
     baseUrl,
     storeDomain,
@@ -231,7 +231,7 @@ export async function getInfoForStore(
     );
   }
 
-  const info: StoreInfo = {
+  const info: ShopInfo = {
     name: name || slug,
     domain: sanitizeDomain(baseUrl),
     slug,

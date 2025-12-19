@@ -1,23 +1,27 @@
-import { getInfoForStore } from "./client/get-info";
+import { getInfoForShop } from "./client/get-info";
 import type {
   CountryDetectionResult,
   CurrencyCode,
   JsonLdEntry,
 } from "./types";
+import { rateLimitedFetch } from "./utils/rate-limit";
 
 /**
  * Store operations interface for managing store-related functionality.
  * Provides methods to fetch comprehensive store information and metadata.
  */
-export interface StoreOperations {
-  info(): Promise<StoreInfo>;
+export interface ShopOperations {
+  info(): Promise<ShopInfo>;
+  getMetaData(): Promise<OpenGraphMeta>;
+  getJsonLd(): Promise<JsonLdEntry[] | undefined>;
+  getHeaderLinks(): Promise<string[]>;
 }
 
 /**
  * Comprehensive store information structure returned by the info method.
  * Contains all metadata, branding, social links, and showcase content for a Shopify store.
  */
-export interface StoreInfo {
+export interface ShopInfo {
   name: string;
   domain: string;
   slug: string;
@@ -45,11 +49,21 @@ export interface StoreInfo {
   currency: CurrencyCode | null;
 }
 
+export interface OpenGraphMeta {
+  siteName: string | null;
+  title: string | null;
+  description: string | null;
+  url: string | null;
+  type: string | null;
+  image: string | null;
+  imageSecureUrl: string | null;
+}
+
 /**
  * Creates store operations for a ShopClient instance.
  * @param context - ShopClient context containing necessary methods and properties for store operations
  */
-export function createStoreOperations(context: {
+export function createShopOperations(context: {
   baseUrl: string;
   storeDomain: string;
   validateProductExists: (handle: string) => Promise<boolean>;
@@ -60,7 +74,7 @@ export function createStoreOperations(context: {
     batchSize?: number
   ) => Promise<T[]>;
   handleFetchError: (error: unknown, context: string, url: string) => never;
-}): StoreOperations {
+}): ShopOperations {
   return {
     /**
      * Fetches comprehensive store information including metadata, social links, and showcase content.
@@ -94,10 +108,10 @@ export function createStoreOperations(context: {
      * console.log(storeInfo.country); // "US"
      * ```
      */
-    info: async (): Promise<StoreInfo> => {
+    info: async (): Promise<ShopInfo> => {
       try {
         // Delegate to shared client parser to avoid redundancy
-        const { info } = await getInfoForStore({
+        const { info } = await getInfoForShop({
           baseUrl: context.baseUrl,
           storeDomain: context.storeDomain,
           validateProductExists: context.validateProductExists,
@@ -321,6 +335,137 @@ export function createStoreOperations(context: {
         */
       } catch (error) {
         context.handleFetchError(error, "fetching store info", context.baseUrl);
+      }
+    },
+    getMetaData: async (): Promise<OpenGraphMeta> => {
+      try {
+        const response = await rateLimitedFetch(context.baseUrl, {
+          rateLimitClass: "store:metadata",
+          timeoutMs: 7000,
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        const getPropertyMetaTag = (property: string) => {
+          const regex = new RegExp(
+            `<meta[^>]*property=["']${property}["'][^>]*content=["'](.*?)["']`
+          );
+          const match = html.match(regex);
+          return match ? match[1] : null;
+        };
+        const siteName = getPropertyMetaTag("og:site_name");
+        const title = getPropertyMetaTag("og:title");
+        const description = getPropertyMetaTag("og:description");
+        const url = getPropertyMetaTag("og:url");
+        const type = getPropertyMetaTag("og:type");
+        const image = getPropertyMetaTag("og:image");
+        const imageSecureUrl = getPropertyMetaTag("og:image:secure_url");
+        return {
+          siteName: siteName ?? null,
+          title: title ?? null,
+          description: description ?? null,
+          url: url ?? null,
+          type: type ?? null,
+          image: image ?? null,
+          imageSecureUrl: imageSecureUrl ?? null,
+        };
+      } catch (error) {
+        context.handleFetchError(
+          error,
+          "fetching store metadata",
+          context.baseUrl
+        );
+      }
+    },
+    getJsonLd: async (): Promise<JsonLdEntry[] | undefined> => {
+      try {
+        const response = await rateLimitedFetch(context.baseUrl, {
+          rateLimitClass: "store:jsonld",
+          timeoutMs: 7000,
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        const scripts =
+          html
+            .match(
+              /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g
+            )
+            ?.map((match) =>
+              match.replace(/^.*?>/, "").replace(/<\/script>$/i, "")
+            ) ?? [];
+        const parsed = scripts
+          .map((json) => {
+            try {
+              return JSON.parse(json) as JsonLdEntry;
+            } catch {
+              return undefined;
+            }
+          })
+          .filter((x): x is JsonLdEntry => !!x);
+        return parsed.length ? parsed : undefined;
+      } catch (error) {
+        context.handleFetchError(
+          error,
+          "fetching store JSON-LD",
+          context.baseUrl
+        );
+      }
+    },
+    getHeaderLinks: async (): Promise<string[]> => {
+      try {
+        const response = await rateLimitedFetch(context.baseUrl, {
+          rateLimitClass: "store:header",
+          timeoutMs: 7000,
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const html = await response.text();
+        const sections =
+          html.match(
+            /<(header|nav|div|section)\b[^>]*\b(?:id|class)=["'][^"']*(?=.*shopify-section)(?=.*\b(header|navigation|nav|menu)\b)[^"']*["'][^>]*>[\s\S]*?<\/\1>/gi
+          ) ?? [];
+        const links = sections
+          .flatMap((section) => section.match(/href=["']([^"']+)["']/g) ?? [])
+          .map((link) => link.match(/href=["']([^"']+)["']/)?.[1])
+          .filter((href): href is string => !!href)
+          .filter(
+            (href) =>
+              href.includes("/products/") ||
+              href.includes("/collections/") ||
+              href.includes("/pages/")
+          )
+          .map((href) => {
+            try {
+              if (href.startsWith("//"))
+                return new URL(`https:${href}`).pathname;
+              if (href.startsWith("/"))
+                return new URL(href, context.storeDomain).pathname;
+              return new URL(href).pathname;
+            } catch {
+              return href;
+            }
+          })
+          .map((p) => p.replace(/^\/|\/$/g, ""));
+        // Deduplicate while preserving order
+        const seen = new Set<string>();
+        const deduped: string[] = [];
+        for (const l of links) {
+          if (!seen.has(l)) {
+            seen.add(l);
+            deduped.push(l);
+          }
+        }
+        return deduped;
+      } catch (error) {
+        context.handleFetchError(
+          error,
+          "fetching header links",
+          context.baseUrl
+        );
       }
     },
   };

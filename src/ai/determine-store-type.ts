@@ -1,9 +1,9 @@
-import type { StoreInfo } from "../store";
+import type { ShopInfo } from "../store";
 import type { StoreTypeBreakdown } from "../types";
 import { determineStoreType as determineStoreTypeViaLLM } from "./enrich";
 
 type Args = {
-  getInfo: () => Promise<StoreInfo>;
+  getInfo: () => Promise<ShopInfo>;
   baseUrl: string;
   findProduct: (handle: string) => Promise<unknown>;
   apiKey?: string;
