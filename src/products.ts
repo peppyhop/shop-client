@@ -1,6 +1,6 @@
 import { filter, isNonNullish } from "remeda";
 // Heavy AI enrich utilities are lazy-loaded where needed to keep base bundle light
-import type { StoreInfo } from "./store";
+import type { ShopInfo } from "./store";
 import type {
   CurrencyCode,
   Product,
@@ -112,7 +112,7 @@ export function createProductOperations(
   fetchProducts: (page: number, limit: number) => Promise<Product[] | null>,
   productsDto: (products: ShopifyProduct[]) => Product[] | null,
   productDto: (product: ShopifySingleProduct) => Product,
-  getStoreInfo: () => Promise<StoreInfo>,
+  getStoreInfo: () => Promise<ShopInfo>,
   findProduct: (handle: string) => Promise<Product | null>
 ): ProductOperations {
   // Use shared formatter from utils

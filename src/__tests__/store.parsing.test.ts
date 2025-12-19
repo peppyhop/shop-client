@@ -1,10 +1,10 @@
-import { createStoreOperations } from "../store";
+import { createShopOperations } from "../store";
 
 jest.mock("../utils/detect-country", () => ({
   detectShopCountry: jest.fn(async () => ({ country: "US" })),
 }));
 
-describe("StoreOperations.info parsing", () => {
+describe("ShopOperations.info parsing", () => {
   const baseUrl = "https://examplestore.com/";
 
   const html = `
@@ -33,7 +33,7 @@ describe("StoreOperations.info parsing", () => {
   });
 
   test("parses social links including protocol-relative and normalizes to https", async () => {
-    const ops = createStoreOperations({
+    const ops = createShopOperations({
       baseUrl,
       storeDomain: baseUrl,
       validateProductExists: async () => true,
@@ -54,7 +54,7 @@ describe("StoreOperations.info parsing", () => {
   });
 
   test("parses contact links for tel, mailto, and contact page", async () => {
-    const ops = createStoreOperations({
+    const ops = createShopOperations({
       baseUrl,
       storeDomain: baseUrl,
       validateProductExists: async () => true,
