@@ -231,6 +231,19 @@ export async function getInfoForShop(
     );
   }
 
+  const dedupeByNormalized = (arr: string[]): string[] => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const h of arr) {
+      const base = h?.split("?")[0]?.replace(/^\/|\/$/g, "");
+      if (!base) continue;
+      if (seen.has(base)) continue;
+      seen.add(base);
+      out.push(base);
+    }
+    return out;
+  };
+
   const info: ShopInfo = {
     name: name || slug,
     domain: sanitizeDomain(baseUrl),
@@ -242,8 +255,8 @@ export async function getInfoForShop(
     contactLinks,
     headerLinks,
     showcase: {
-      products: unique(homePageProductLinks ?? []),
-      collections: unique(homePageCollectionLinks ?? []),
+      products: dedupeByNormalized(homePageProductLinks ?? []),
+      collections: dedupeByNormalized(homePageCollectionLinks ?? []),
     },
     jsonLdData:
       html

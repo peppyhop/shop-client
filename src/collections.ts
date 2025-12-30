@@ -352,8 +352,18 @@ export function createCollectionOperations(
      */
     showcased: async () => {
       const storeInfo = await getStoreInfo();
+      const normalizedHandles = storeInfo.showcase.collections
+        .map((h: string) => h.split("?")[0]?.replace(/^\/|\/$/g, ""))
+        .filter((base): base is string => Boolean(base));
+      const seen = new Set<string>();
+      const uniqueHandles: string[] = [];
+      for (const base of normalizedHandles) {
+        if (seen.has(base)) continue;
+        seen.add(base);
+        uniqueHandles.push(base);
+      }
       const collections = await Promise.all(
-        storeInfo.showcase.collections.map((collectionHandle: string) =>
+        uniqueHandles.map((collectionHandle: string) =>
           findCollection(collectionHandle)
         )
       );

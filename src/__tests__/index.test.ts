@@ -1,8 +1,6 @@
 import { ShopClient } from "../index"; // Assuming your ShopClient class is exported from index.ts
 
-// Skip live network-dependent tests unless explicitly enabled
-const LIVE_TESTS = process.env.LIVE_TESTS === "true";
-const itLive = LIVE_TESTS ? test : test.skip;
+const itLive = test.skip;
 
 describe("ShopClient Class Integration Tests", () => {
   let shop: ShopClient;

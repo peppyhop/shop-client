@@ -699,14 +699,11 @@ Determine the store’s primary verticals and target audiences using showcased p
 ```typescript
 import { ShopClient } from 'shop-client';
 
-const shop = new ShopClient('your-store-domain.com');
+const shop = new ShopClient('your-store-domain.com', {
+  openRouter: { apiKey: 'YOUR_OPENROUTER_API_KEY', model: 'openai/gpt-4o-mini' },
+});
 
 const breakdown = await shop.determineStoreType({
-  // Optional: provide an OpenRouter API key for online classification
-  // Offline mode falls back to regex heuristics if no key is set
-  apiKey: process.env.OPENROUTER_API_KEY,
-  // Optional: model name when using online classification
-  model: 'openai/gpt-4o-mini',
   // Optional: limit the number of showcased products sampled (default 10, max 50)
   maxShowcaseProducts: 12,
   // Note: showcased collections are not used for classification
@@ -724,34 +721,38 @@ Details:
 - Uses only `product.bodyHtml` for classification (no images or external text).
 - Samples up to `maxShowcaseProducts` from `getInfo().showcase.products`.
 - Aggregates per-product audience/vertical into a multi-audience breakdown.
-- If `OPENROUTER_API_KEY` is absent or `OPENROUTER_OFFLINE=1`, uses offline regex heuristics.
+- If `openRouter.offline` is `true`, uses offline regex heuristics. Otherwise, an OpenRouter API key is required (via `ShopClient` options or `determineStoreType({ apiKey })`).
 - Applies store-level pruning based on title/description to improve consistency.
 
 ### AI Enrichment
 
 ```typescript
-import { classifyProduct, generateSEOContent } from 'shop-client';
+import { ShopClient } from 'shop-client';
 
-// Classify a single product (offline or via OpenRouter when configured)
-const classification = await classifyProduct({
-  title: 'Organic Cotton T-Shirt',
-  bodyHtml: '<p>Soft, breathable cotton tee</p>',
-  tags: ['organic', 'cotton', 'unisex'],
+const shop = new ShopClient('your-store-domain.com', {
+  openRouter: { apiKey: 'YOUR_OPENROUTER_API_KEY', model: 'openai/gpt-4o-mini' },
 });
-// classification → { adult_unisex: { clothing: ['t-shirts'] } }
 
-// Generate basic SEO content for a product
-const seo = await generateSEOContent({
-  title: 'Organic Cotton T-Shirt',
-  description: 'Soft, breathable tee for everyday wear',
-  tags: ['organic', 'cotton', 'unisex'],
+// Merge API (Ajax) + product page content into a clean description
+const enrichedMarkdown = await shop.products.enriched('some-product-handle', {
+  outputFormat: 'markdown',
 });
-// seo.metaTitle, seo.metaDescription, seo.keywords
+// enrichedMarkdown?.enriched_content → markdown
+
+const enrichedJson = await shop.products.enriched('some-product-handle', {
+  outputFormat: 'json',
+});
+// enrichedJson?.enriched_content → JSON string (validated)
+
+// Build prompts without calling the LLM (useful for debugging)
+const { system, user } = await shop.products.enrichedPrompts('some-product-handle', {
+  outputFormat: 'markdown',
+});
 ```
 
 Notes:
-- `classifyProduct` mirrors the store-level classification logic but operates on a single product.
-- `generateSEOContent` produces lightweight, deterministic metadata suitable for catalogs and PDPs.
+- `enriched()` returns `enriched_content` as either markdown or a validated JSON string (based on `outputFormat`).
+- `enrichedPrompts()` and `classifyPrompts()` return the prompt pair without making network calls.
 
 ## 🏗️ Type Definitions
 

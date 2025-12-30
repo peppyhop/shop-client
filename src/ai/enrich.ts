@@ -1,21 +1,308 @@
 import TurndownService from "turndown";
-// @ts-expect-error
-import { gfm } from "turndown-plugin-gfm";
 import type {
+  OpenRouterConfig,
   ProductClassification,
   SEOContent,
   ShopifySingleProduct,
+  SystemUserPrompt,
 } from "../types";
 import { rateLimitedFetch } from "../utils/rate-limit";
 
-function ensureOpenRouter(apiKey?: string) {
-  const key = apiKey || process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    throw new Error(
-      "Missing OpenRouter API key. Set OPENROUTER_API_KEY or pass apiKey."
-    );
+const DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini";
+const DEFAULT_OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+const DEFAULT_OPENROUTER_APP_TITLE = "Shop Client";
+const SHOPIFY_PRODUCT_IMAGE_PATTERNS = [
+  "cdn.shopify.com",
+  "/products/",
+  "%2Fproducts%2F",
+  "_large",
+  "_grande",
+  "_1024x1024",
+  "_2048x",
+];
+const TURNDOWN_REMOVE_TAGS = ["script", "style", "nav", "footer"];
+const TURNDOWN_REMOVE_CLASSNAMES = [
+  "product-form",
+  "shopify-payment-button",
+  "shopify-payment-buttons",
+  "product__actions",
+  "product__media-wrapper",
+  "loox-rating",
+  "jdgm-widget",
+  "stamped-reviews",
+  "quantity-selector",
+  "product-atc-wrapper",
+];
+const TURNDOWN_REMOVE_NODE_NAMES = ["button", "input", "select", "label"];
+
+let cachedGfmPlugin: any | undefined;
+let gfmPluginPromise: Promise<any> | undefined;
+let cachedTurndownPlain: TurndownService | undefined;
+let cachedTurndownGfm: TurndownService | undefined;
+
+async function loadGfmPlugin(): Promise<any> {
+  if (cachedGfmPlugin) return cachedGfmPlugin;
+  if (gfmPluginPromise) return gfmPluginPromise;
+  gfmPluginPromise = import("turndown-plugin-gfm")
+    .then((mod: any) => {
+      const resolved = mod?.gfm ?? mod?.default?.gfm ?? mod?.default ?? mod;
+      cachedGfmPlugin = resolved;
+      return resolved;
+    })
+    .finally(() => {
+      gfmPluginPromise = undefined;
+    });
+  return gfmPluginPromise;
+}
+
+function configureTurndown(td: TurndownService) {
+  for (const tag of TURNDOWN_REMOVE_TAGS) {
+    td.remove((node) => node.nodeName?.toLowerCase() === tag);
   }
-  return key;
+
+  const removeByClass = (className: string) =>
+    td.remove((node: any) => {
+      const cls =
+        typeof node.getAttribute === "function"
+          ? node.getAttribute("class") || ""
+          : "";
+      return (cls as string).split(/\s+/).includes(className);
+    });
+  for (const className of TURNDOWN_REMOVE_CLASSNAMES) {
+    removeByClass(className);
+  }
+
+  for (const nodeName of TURNDOWN_REMOVE_NODE_NAMES) {
+    td.remove((node) => node.nodeName?.toLowerCase() === nodeName);
+  }
+}
+
+async function getTurndownService(useGfm: boolean): Promise<TurndownService> {
+  if (useGfm && cachedTurndownGfm) return cachedTurndownGfm;
+  if (!useGfm && cachedTurndownPlain) return cachedTurndownPlain;
+
+  const td = new TurndownService({
+    headingStyle: "atx",
+    codeBlockStyle: "fenced",
+    bulletListMarker: "-",
+    emDelimiter: "*",
+    strongDelimiter: "**",
+    linkStyle: "inlined",
+  });
+
+  if (useGfm) {
+    const gfm = await loadGfmPlugin();
+    if (gfm) td.use(gfm);
+  }
+
+  configureTurndown(td);
+
+  if (useGfm) cachedTurndownGfm = td;
+  else cachedTurndownPlain = td;
+  return td;
+}
+
+export function buildEnrichPrompt(args: {
+  bodyInput: string;
+  pageInput: string;
+  inputType: "markdown" | "html";
+  outputFormat: "markdown" | "json";
+}): SystemUserPrompt {
+  const bodyLabel = args.inputType === "html" ? "BODY HTML" : "BODY MARKDOWN";
+  const pageLabel = args.inputType === "html" ? "PAGE HTML" : "PAGE MARKDOWN";
+
+  if (args.outputFormat === "json") {
+    return {
+      system:
+        "You are a product-data extraction engine. Combine two sources (Shopify body_html and product page) into a single structured summary. Return ONLY valid JSON (no markdown, no code fences, no extra text).",
+      user: `Inputs:
+1) ${bodyLabel}: ${args.inputType === "html" ? "Raw Shopify product body_html" : "Cleaned version of Shopify product body_html"}
+2) ${pageLabel}: ${args.inputType === "html" ? "Raw product page HTML (main section)" : "Extracted product page HTML converted to markdown"}
+
+Return ONLY valid JSON with this shape (include ALL keys; use null/[] when unknown):
+{
+  "title": null | string,
+  "description": null | string,
+  "highlights": string[] | [],
+  "features": string[] | [],
+  "specs": Record<string, string> | {},
+  "materials": string[] | [],
+  "care": string[] | [],
+  "fit": null | string,
+  "sizeGuide": null | string,
+  "shipping": null | string,
+  "warranty": null | string,
+  "images": null | string[],
+  "returnPolicy": null | string
+}
+
+Rules:
+- Use BOTH sources and deduplicate overlapping content.
+- Prefer the more specific / more recent details when sources differ; never invent facts.
+- Do not invent facts; if a field is unavailable, use null or []
+- Prefer concise, factual statements (avoid marketing fluff).
+- Keep units and measurements as written (e.g., inches/cm); do not convert unless explicitly provided.
+- Do NOT include product gallery/hero images in "images"; include only documentation images like size charts or measurement guides. If none, set "images": null.
+- "specs" is a flat key/value map for concrete attributes (e.g., "Made in": "Portugal", "Weight": "320g"). Use {} if none.
+
+${bodyLabel}:
+${args.bodyInput}
+
+${pageLabel}:
+${args.pageInput}`,
+    };
+  }
+
+  return {
+    system:
+      "You merge Shopify product content into a single buyer-ready markdown description. Output ONLY markdown (no code fences, no commentary).",
+    user: `Inputs:
+1) ${bodyLabel}: ${args.inputType === "html" ? "Raw Shopify product body_html" : "Cleaned version of Shopify product body_html"}
+2) ${pageLabel}: ${args.inputType === "html" ? "Raw product page HTML (main section)" : "Extracted product page HTML converted to markdown"}
+
+Tasks:
+- Merge both sources into a single clean markdown document and deduplicate overlap.
+- Keep only buyer-useful info (concrete details); remove theme/UI junk, menus, buttons, upsells, reviews widgets, legal boilerplate.
+- Do NOT include product gallery/hero images. If documentation images exist (size chart, measurement guide, care diagram), include them.
+- Do NOT list interactive option selectors (e.g., "Choose Size" buttons), but DO keep meaningful option information (e.g., sizing notes, fit guidance, measurement tables, what's included).
+- If sources disagree, prefer the more specific detail; never invent facts.
+- Do not write "information not available" or similar.
+- Use this section order when content exists (omit empty sections):
+  - ## Overview (2–4 sentences)
+  - ## Key Features (bullets)
+  - ## Materials
+  - ## Care
+  - ## Fit & Sizing
+  - ## Size Guide (include documentation images + key measurements)
+  - ## Shipping & Returns
+
+${bodyLabel}:
+${args.bodyInput}
+
+${pageLabel}:
+${args.pageInput}`,
+  };
+}
+
+export function buildClassifyPrompt(productContent: string): SystemUserPrompt {
+  return {
+    system:
+      "You classify products using a three-tier hierarchy. Return only valid JSON without markdown or code fences.",
+    user: `Classify the following product using a three-tiered hierarchy:
+
+Product Content:
+${productContent}
+
+Classification Rules:
+1. First determine the vertical (main product category)
+2. Then determine the category (specific type within that vertical)
+3. Finally determine the subCategory (sub-type within that category)
+
+Vertical must be one of: clothing, beauty, accessories, home-decor, food-and-beverages
+Audience must be one of: adult_male, adult_female, kid_male, kid_female, generic
+
+Hierarchy Examples:
+- Clothing → tops → t-shirts
+- Clothing → footwear → sneakers
+- Beauty → skincare → moisturizers
+- Accessories → bags → backpacks
+- Home-decor → furniture → chairs
+- Food-and-beverages → snacks → chips
+
+IMPORTANT CONSTRAINTS:
+- Category must be relevant to the chosen vertical
+- subCategory must be relevant to both vertical and category
+- subCategory must be a single word or hyphenated words (no spaces)
+- subCategory should NOT be material (e.g., "cotton", "leather") or color (e.g., "red", "blue")
+- Focus on product type/function, not attributes
+
+If you're not confident about category or sub-category, you can leave them optional.
+
+Return ONLY valid JSON (no markdown, no code fences) with keys:
+{
+  "audience": "adult_male" | "adult_female" | "kid_male" | "kid_female" | "generic",
+  "vertical": "clothing" | "beauty" | "accessories" | "home-decor" | "food-and-beverages",
+  "category": null | string,
+  "subCategory": null | string
+}`,
+  };
+}
+
+export async function buildEnrichPromptForProduct(
+  domain: string,
+  handle: string,
+  options?: {
+    useGfm?: boolean;
+    inputType?: "markdown" | "html";
+    outputFormat?: "markdown" | "json";
+  }
+): Promise<SystemUserPrompt> {
+  const [ajaxProduct, pageHtml] = await Promise.all([
+    fetchAjaxProduct(domain, handle),
+    fetchProductPage(domain, handle),
+  ]);
+  const bodyHtml = ajaxProduct.description || "";
+  const extractedHtml = extractMainSection(pageHtml);
+
+  const inputType = options?.inputType ?? "markdown";
+  const outputFormat = options?.outputFormat ?? "markdown";
+  const bodyInput =
+    inputType === "html"
+      ? bodyHtml
+      : await htmlToMarkdown(bodyHtml, { useGfm: options?.useGfm });
+  const pageInput =
+    inputType === "html"
+      ? extractedHtml || pageHtml
+      : await htmlToMarkdown(extractedHtml || pageHtml, {
+          useGfm: options?.useGfm,
+        });
+
+  return buildEnrichPrompt({ bodyInput, pageInput, inputType, outputFormat });
+}
+
+export async function buildClassifyPromptForProduct(
+  domain: string,
+  handle: string,
+  options?: { useGfm?: boolean; inputType?: "markdown" | "html" }
+): Promise<SystemUserPrompt> {
+  const [ajaxProduct, pageHtml] = await Promise.all([
+    fetchAjaxProduct(domain, handle),
+    fetchProductPage(domain, handle),
+  ]);
+  const bodyHtml = ajaxProduct.description || "";
+  const extractedHtml = extractMainSection(pageHtml);
+
+  const inputType = options?.inputType ?? "markdown";
+  const bodyInput =
+    inputType === "html"
+      ? bodyHtml
+      : await htmlToMarkdown(bodyHtml, { useGfm: options?.useGfm });
+  const pageInput =
+    inputType === "html"
+      ? extractedHtml || pageHtml
+      : await htmlToMarkdown(extractedHtml || pageHtml, {
+          useGfm: options?.useGfm,
+        });
+
+  const header = [
+    `Title: ${String(ajaxProduct.title || "")}`.trim(),
+    ajaxProduct.vendor ? `Vendor: ${String(ajaxProduct.vendor)}` : null,
+    Array.isArray(ajaxProduct.tags) && ajaxProduct.tags.length
+      ? `Tags: ${ajaxProduct.tags.join(", ")}`
+      : null,
+  ]
+    .filter((s): s is string => Boolean(s && s.trim()))
+    .join("\n");
+
+  const productContent = [
+    header,
+    `Body:\n${bodyInput}`.trim(),
+    `Page:\n${pageInput}`.trim(),
+  ]
+    .filter((s) => Boolean(s && s.trim()))
+    .join("\n\n");
+
+  return buildClassifyPrompt(productContent);
 }
 
 function normalizeDomainToBase(domain: string): string {
@@ -93,60 +380,13 @@ export function extractMainSection(html: string): string | null {
  * Convert HTML → Clean Markdown using Turndown
  * Includes Shopify cleanup rules + GFM support
  */
-export function htmlToMarkdown(
+export async function htmlToMarkdown(
   html: string | null,
   options?: { useGfm?: boolean }
-): string {
+): Promise<string> {
   if (!html) return "";
-
-  const td = new TurndownService({
-    headingStyle: "atx",
-    codeBlockStyle: "fenced",
-    bulletListMarker: "-",
-    emDelimiter: "*",
-    strongDelimiter: "**",
-    linkStyle: "inlined",
-  });
-
-  // Enable GitHub flavored markdown
   const useGfm = options?.useGfm ?? true;
-  if (useGfm) {
-    td.use(gfm);
-  }
-
-  // Remove noise: scripts, styles, theme blocks
-  ["script", "style", "nav", "footer"].forEach((tag) => {
-    td.remove((node) => node.nodeName?.toLowerCase() === tag);
-  });
-
-  // Remove Shopify-specific junk
-  const removeByClass = (className: string) =>
-    td.remove((node: any) => {
-      const cls =
-        typeof node.getAttribute === "function"
-          ? node.getAttribute("class") || ""
-          : "";
-      return (cls as string).split(/\s+/).includes(className);
-    });
-  [
-    "product-form",
-    "shopify-payment-button",
-    "shopify-payment-buttons",
-    "product__actions",
-    "product__media-wrapper",
-    "loox-rating",
-    "jdgm-widget",
-    "stamped-reviews",
-  ].forEach(removeByClass);
-
-  // Remove UI input elements
-  ["button", "input", "select", "label"].forEach((tag) => {
-    td.remove((node) => node.nodeName?.toLowerCase() === tag);
-  });
-
-  // Remove add-to-cart + quantity controls
-  ["quantity-selector", "product-atc-wrapper"].forEach(removeByClass);
-
+  const td = await getTurndownService(useGfm);
   return td.turndown(html);
 }
 
@@ -161,74 +401,37 @@ export async function mergeWithLLM(
     inputType?: "markdown" | "html";
     model?: string;
     outputFormat?: "markdown" | "json";
+    openRouter?: OpenRouterConfig;
   }
 ): Promise<string> {
   const inputType = options?.inputType ?? "markdown";
-  const bodyLabel = inputType === "html" ? "BODY HTML" : "BODY MARKDOWN";
-  const pageLabel = inputType === "html" ? "PAGE HTML" : "PAGE MARKDOWN";
-  const prompt =
-    options?.outputFormat === "json"
-      ? `You are extracting structured buyer-useful information from Shopify product content.
-
-Inputs:
-1) ${bodyLabel}: ${inputType === "html" ? "Raw Shopify product body_html" : "Cleaned version of Shopify product body_html"}
-2) ${pageLabel}: ${inputType === "html" ? "Raw product page HTML (main section)" : "Extracted product page HTML converted to markdown"}
-
-Return ONLY valid JSON (no markdown, no code fences) with this shape:
-{
-  "title": null | string,
-  "description": null | string,
-  "materials": string[] | [],
-  "care": string[] | [],
-  "fit": null | string,
-  "images": null | string[],
-  "returnPolicy": null | string
-}
-
-Rules:
-- Do not invent facts; if a field is unavailable, use null or []
-- Prefer concise, factual statements
- - Do NOT include product gallery/hero images in "images"; include only documentation images like size charts or measurement guides. If none, set "images": null.
-
-${bodyLabel}:
-${bodyInput}
-
-${pageLabel}:
-${pageInput}
-`
-      : `
-You are enriching a Shopify product for a modern shopping-discovery app.
-
-Inputs:
-1) ${bodyLabel}: ${inputType === "html" ? "Raw Shopify product body_html" : "Cleaned version of Shopify product body_html"}
-2) ${pageLabel}: ${inputType === "html" ? "Raw product page HTML (main section)" : "Extracted product page HTML converted to markdown"}
-
-Your tasks:
-- Merge them into a single clean markdown document
-- Remove duplicate content
-- Remove product images
-- Remove UI text, buttons, menus, review widgets, theme junk
-- Remove product options
-- Keep only available buyer-useful info: features, materials, care, fit, size chart, return policy, size chart, care instructions
-- Include image of size-chart if present
-- Don't include statements like information not available.
-- Maintain structured headings (## Description, ## Materials, etc.)
-- Output ONLY markdown (no commentary)
-
-${bodyLabel}:
-${bodyInput}
-
-${pageLabel}:
-${pageInput}
-`;
-  const apiKey = ensureOpenRouter(options?.apiKey);
-
-  // Default model via environment or safe fallback (OpenRouter slug)
-  const defaultModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-  const model = options?.model ?? defaultModel;
+  const outputFormat = options?.outputFormat ?? "markdown";
+  const prompts = buildEnrichPrompt({
+    bodyInput,
+    pageInput,
+    inputType,
+    outputFormat,
+  });
+  const openRouter = options?.openRouter;
+  const offline = openRouter?.offline ?? false;
+  const apiKey = options?.apiKey ?? openRouter?.apiKey;
+  if (!offline && !apiKey) {
+    throw new Error(
+      "Missing OpenRouter API key. Pass apiKey or set ShopClient options.openRouter.apiKey."
+    );
+  }
+  const model = options?.model ?? openRouter?.model ?? DEFAULT_OPENROUTER_MODEL;
 
   // OpenRouter path only
-  const result = await callOpenRouter(model, prompt, apiKey);
+  const result = await callOpenRouter({
+    model,
+    messages: [
+      { role: "system", content: prompts.system },
+      { role: "user", content: prompts.user },
+    ],
+    apiKey,
+    openRouter,
+  });
   if (options?.outputFormat === "json") {
     const cleaned = result.replace(/```json|```/g, "").trim();
     // Validate shape early to fail fast on malformed JSON responses
@@ -247,17 +450,7 @@ ${pageInput}
       const filtered = value.images.filter((url: string) => {
         if (typeof url !== "string") return false;
         const u = url.toLowerCase();
-        // Common Shopify product image patterns to exclude
-        const productPatterns = [
-          "cdn.shopify.com",
-          "/products/",
-          "%2Fproducts%2F",
-          "_large",
-          "_grande",
-          "_1024x1024",
-          "_2048x",
-        ];
-        const looksLikeProductImage = productPatterns.some((p) =>
+        const looksLikeProductImage = SHOPIFY_PRODUCT_IMAGE_PATTERNS.some((p) =>
           u.includes(p)
         );
         return !looksLikeProductImage;
@@ -346,46 +539,53 @@ function validateStructuredJson(
 }
 
 // OpenRouter handler (OpenAI-compatible payload, single key to access many models)
-async function callOpenRouter(
-  model: string,
-  prompt: string,
-  apiKey: string
-): Promise<string> {
-  // Offline fallback for environments without network egress.
-  // Enable by setting OPENROUTER_OFFLINE=1.
-  if (process.env.OPENROUTER_OFFLINE === "1") {
-    return mockOpenRouterResponse(prompt);
+async function callOpenRouter(args: {
+  model: string;
+  messages: Array<{ role: "system" | "user"; content: string }>;
+  apiKey?: string;
+  openRouter?: OpenRouterConfig;
+}): Promise<string> {
+  const openRouter = args.openRouter;
+  if (openRouter?.offline) {
+    return mockOpenRouterResponse(
+      args.messages.map((m) => m.content).join("\n")
+    );
   }
+
+  const apiKey = args.apiKey ?? openRouter?.apiKey;
+  if (!apiKey) {
+    throw new Error(
+      "Missing OpenRouter API key. Pass apiKey or set ShopClient options.openRouter.apiKey."
+    );
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${apiKey}`,
   };
-  const referer = process.env.OPENROUTER_SITE_URL || process.env.SITE_URL;
-  const title = process.env.OPENROUTER_APP_TITLE || "Shop Client";
+  const referer = openRouter?.siteUrl;
+  const title = openRouter?.appTitle ?? DEFAULT_OPENROUTER_APP_TITLE;
   if (referer) headers["HTTP-Referer"] = referer;
   if (title) headers["X-Title"] = title;
 
   const buildPayload = (m: string) => ({
     model: m,
-    messages: [{ role: "user", content: prompt }],
+    messages: args.messages,
     temperature: 0.2,
   });
 
-  // Use Quickstart-recommended base: https://openrouter.ai/api/v1
-  // Allow override via OPENROUTER_BASE_URL
-  const base = (
-    process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1"
-  ).replace(/\/$/, "");
+  const base = (openRouter?.baseUrl ?? DEFAULT_OPENROUTER_BASE_URL).replace(
+    /\/$/,
+    ""
+  );
   const endpoints = [`${base}/chat/completions`];
 
-  // Prepare fallback models
-  const fallbackEnv = (process.env.OPENROUTER_FALLBACK_MODELS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const defaultModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+  const fallbackModels = (openRouter?.fallbackModels ?? []).filter(
+    (s): s is string => typeof s === "string" && Boolean(s.trim())
+  );
+  const defaultModel = openRouter?.model ?? DEFAULT_OPENROUTER_MODEL;
   const modelsToTry = Array.from(
-    new Set([model, ...fallbackEnv, defaultModel])
+    new Set([args.model, ...fallbackModels, defaultModel])
   ).filter(Boolean);
 
   let lastErrorText = "";
@@ -473,14 +673,15 @@ export async function enrichProduct(
     inputType?: "markdown" | "html";
     model?: string;
     outputFormat?: "markdown" | "json";
+    openRouter?: OpenRouterConfig;
   }
 ): Promise<EnrichedProductResult> {
   // STEP 1: Fetch Shopify single product (AJAX) and use its description
-  const ajaxProduct = await fetchAjaxProduct(domain, handle);
+  const [ajaxProduct, pageHtml] = await Promise.all([
+    fetchAjaxProduct(domain, handle),
+    fetchProductPage(domain, handle),
+  ]);
   const bodyHtml = ajaxProduct.description || "";
-
-  // STEP 2: Full product page HTML
-  const pageHtml = await fetchProductPage(domain, handle);
 
   // STEP 3: Extract main section
   const extractedHtml = extractMainSection(pageHtml);
@@ -490,11 +691,13 @@ export async function enrichProduct(
   const bodyInput =
     inputType === "html"
       ? bodyHtml
-      : htmlToMarkdown(bodyHtml, { useGfm: options?.useGfm });
+      : await htmlToMarkdown(bodyHtml, { useGfm: options?.useGfm });
   const pageInput =
     inputType === "html"
       ? extractedHtml || pageHtml
-      : htmlToMarkdown(extractedHtml, { useGfm: options?.useGfm });
+      : await htmlToMarkdown(extractedHtml || pageHtml, {
+          useGfm: options?.useGfm,
+        });
 
   // STEP 5: Merge using LLM
   const mergedMarkdown = await mergeWithLLM(bodyInput, pageInput, {
@@ -502,6 +705,7 @@ export async function enrichProduct(
     inputType,
     model: options?.model,
     outputFormat: options?.outputFormat,
+    openRouter: options?.openRouter,
   });
 
   // If JSON output requested, further sanitize images using Shopify REST data
@@ -544,17 +748,8 @@ export async function enrichProduct(
           const u = url.toLowerCase();
           if (productSet.has(u)) return false;
           // Also exclude common Shopify product image patterns
-          const productPatterns = [
-            "cdn.shopify.com",
-            "/products/",
-            "%2Fproducts%2F",
-            "_large",
-            "_grande",
-            "_1024x1024",
-            "_2048x",
-          ];
-          const looksLikeProductImage = productPatterns.some((p) =>
-            u.includes(p)
+          const looksLikeProductImage = SHOPIFY_PRODUCT_IMAGE_PATTERNS.some(
+            (p) => u.includes(p)
           );
           return !looksLikeProductImage;
         });
@@ -586,51 +781,28 @@ export async function enrichProduct(
  */
 export async function classifyProduct(
   productContent: string,
-  options?: { apiKey?: string; model?: string }
+  options?: { apiKey?: string; model?: string; openRouter?: OpenRouterConfig }
 ): Promise<ProductClassification> {
-  const apiKey = ensureOpenRouter(options?.apiKey);
-  const defaultModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-  const model = options?.model ?? defaultModel;
+  const openRouter = options?.openRouter;
+  const offline = openRouter?.offline ?? false;
+  const apiKey = options?.apiKey ?? openRouter?.apiKey;
+  if (!offline && !apiKey) {
+    throw new Error(
+      "Missing OpenRouter API key. Pass apiKey or set ShopClient options.openRouter.apiKey."
+    );
+  }
+  const model = options?.model ?? openRouter?.model ?? DEFAULT_OPENROUTER_MODEL;
 
-  const prompt = `Classify the following product using a three-tiered hierarchy:
-
-Product Content:
-${productContent}
-
-Classification Rules:
-1. First determine the vertical (main product category)
-2. Then determine the category (specific type within that vertical)
-3. Finally determine the subCategory (sub-type within that category)
-
-Vertical must be one of: clothing, beauty, accessories, home-decor, food-and-beverages
-Audience must be one of: adult_male, adult_female, kid_male, kid_female, generic
-
-Hierarchy Examples:
-- Clothing → tops → t-shirts
-- Clothing → footwear → sneakers
-- Beauty → skincare → moisturizers
-- Accessories → bags → backpacks
-- Home-decor → furniture → chairs
-- Food-and-beverages → snacks → chips
-
-IMPORTANT CONSTRAINTS:
-- Category must be relevant to the chosen vertical
-- subCategory must be relevant to both vertical and category
-- subCategory must be a single word or hyphenated words (no spaces)
-- subCategory should NOT be material (e.g., "cotton", "leather") or color (e.g., "red", "blue")
-- Focus on product type/function, not attributes
-
-If you're not confident about category or sub-category, you can leave them optional.
-
-Return ONLY valid JSON (no markdown, no code fences) with keys:
-{
-  "audience": "adult_male" | "adult_female" | "kid_male" | "kid_female" | "generic",
-  "vertical": "clothing" | "beauty" | "accessories" | "home-decor" | "food-and-beverages",
-  "category": null | string,
-  "subCategory": null | string
-}`;
-
-  const raw = await callOpenRouter(model, prompt, apiKey);
+  const prompts = buildClassifyPrompt(productContent);
+  const raw = await callOpenRouter({
+    model,
+    messages: [
+      { role: "system", content: prompts.system },
+      { role: "user", content: prompts.user },
+    ],
+    apiKey,
+    openRouter,
+  });
   const cleaned = raw.replace(/```json|```/g, "").trim();
 
   // Parse and validate
@@ -735,14 +907,15 @@ export async function generateSEOContent(
     price?: number;
     tags?: string[];
   },
-  options?: { apiKey?: string; model?: string }
+  options?: { apiKey?: string; model?: string; openRouter?: OpenRouterConfig }
 ): Promise<SEOContent> {
-  const apiKey = ensureOpenRouter(options?.apiKey);
-  const defaultModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-  const model = options?.model ?? defaultModel;
+  const openRouter = options?.openRouter;
+  const offline = openRouter?.offline ?? false;
+  const apiKey = options?.apiKey ?? openRouter?.apiKey;
+  const model = options?.model ?? openRouter?.model ?? DEFAULT_OPENROUTER_MODEL;
 
-  // Offline deterministic mock
-  if (process.env.OPENROUTER_OFFLINE === "1") {
+  if (offline) {
+    // Offline deterministic mock
     const baseTags = Array.isArray(product.tags)
       ? product.tags.slice(0, 6)
       : [];
@@ -777,7 +950,25 @@ export async function generateSEOContent(
 
   const prompt = `Generate SEO-optimized content for this product:\n\nTitle: ${product.title}\nDescription: ${product.description || "N/A"}\nVendor: ${product.vendor || "N/A"}\nPrice: ${typeof product.price === "number" ? `$${product.price}` : "N/A"}\nTags: ${Array.isArray(product.tags) && product.tags.length ? product.tags.join(", ") : "N/A"}\n\nCreate compelling, SEO-friendly content that will help this product rank well and convert customers.\n\nReturn ONLY valid JSON (no markdown, no code fences) with keys: {\n  "metaTitle": string,\n  "metaDescription": string,\n  "shortDescription": string,\n  "longDescription": string,\n  "tags": string[],\n  "marketingCopy": string\n}`;
 
-  const raw = await callOpenRouter(model, prompt, apiKey);
+  if (!apiKey) {
+    throw new Error(
+      "Missing OpenRouter API key. Pass apiKey or set ShopClient options.openRouter.apiKey."
+    );
+  }
+
+  const raw = await callOpenRouter({
+    model,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You generate SEO content and return only valid JSON without markdown or code fences.",
+      },
+      { role: "user", content: prompt },
+    ],
+    apiKey,
+    openRouter,
+  });
   const cleaned = raw.replace(/```json|```/g, "").trim();
   const parsed = safeParseJson(cleaned);
   if (!parsed.ok) {
@@ -846,7 +1037,7 @@ export async function determineStoreType(
       collections: Array<{ title: string }> | string[];
     };
   },
-  options?: { apiKey?: string; model?: string }
+  options?: { apiKey?: string; model?: string; openRouter?: OpenRouterConfig }
 ): Promise<
   Partial<
     Record<
@@ -855,9 +1046,10 @@ export async function determineStoreType(
     >
   >
 > {
-  const apiKey = ensureOpenRouter(options?.apiKey);
-  const defaultModel = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-  const model = options?.model ?? defaultModel;
+  const openRouter = options?.openRouter;
+  const offline = openRouter?.offline ?? false;
+  const apiKey = options?.apiKey ?? openRouter?.apiKey;
+  const model = options?.model ?? openRouter?.model ?? DEFAULT_OPENROUTER_MODEL;
 
   // Normalize showcase items to titles for readable prompt content
   const productLines = (
@@ -890,8 +1082,8 @@ Sample Collections:\n${collectionLines.join("\n") || "- N/A"}`;
   const textNormalized =
     `${storeInfo.title} ${storeInfo.description ?? ""} ${productLines.join(" ")} ${collectionLines.join(" ")}`.toLowerCase();
 
-  // Offline deterministic mock with light heuristics
-  if (process.env.OPENROUTER_OFFLINE === "1") {
+  if (offline) {
+    // Offline deterministic mock with light heuristics
     const text =
       `${storeInfo.title} ${storeInfo.description ?? ""} ${productLines.join(" ")} ${collectionLines.join(" ")}`.toLowerCase();
     const verticalKeywords: Record<string, RegExp> = {
@@ -986,7 +1178,25 @@ Rules:
 - Values MUST be non-empty arrays of category strings.
 `;
 
-  const raw = await callOpenRouter(model, prompt, apiKey);
+  if (!apiKey) {
+    throw new Error(
+      "Missing OpenRouter API key. Pass apiKey or set ShopClient options.openRouter.apiKey."
+    );
+  }
+
+  const raw = await callOpenRouter({
+    model,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You analyze a Shopify store and return only valid JSON without markdown or code fences.",
+      },
+      { role: "user", content: prompt },
+    ],
+    apiKey,
+    openRouter,
+  });
   const cleaned = raw.replace(/```json|```/g, "").trim();
   const parsed = safeParseJson(cleaned);
   if (!parsed.ok) {

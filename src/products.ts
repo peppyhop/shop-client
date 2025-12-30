@@ -3,6 +3,7 @@ import { filter, isNonNullish } from "remeda";
 import type { ShopInfo } from "./store";
 import type {
   CurrencyCode,
+  OpenRouterConfig,
   Product,
   ProductClassification,
   SEOContent,
@@ -41,7 +42,7 @@ export interface ProductOperations {
 
   /**
    * Finds a product by handle and enriches its content using LLM.
-   * Requires an OpenAI API key via options.apiKey or process.env.OPENAI_API_KEY.
+   * Requires an OpenRouter API key via options.apiKey or ShopClient options.
    */
   enriched(
     productHandle: string,
@@ -53,10 +54,25 @@ export interface ProductOperations {
       outputFormat?: "markdown" | "json";
     }
   ): Promise<Product | null>;
+
+  enrichedPrompts(
+    productHandle: string,
+    options?: {
+      useGfm?: boolean;
+      inputType?: "markdown" | "html";
+      outputFormat?: "markdown" | "json";
+    }
+  ): Promise<{ system: string; user: string }>;
+
   classify(
     productHandle: string,
     options?: { apiKey?: string; model?: string }
   ): Promise<ProductClassification | null>;
+
+  classifyPrompts(
+    productHandle: string,
+    options?: { useGfm?: boolean; inputType?: "markdown" | "html" }
+  ): Promise<{ system: string; user: string }>;
 
   /**
    * Generate SEO and marketing content for a product.
@@ -113,7 +129,8 @@ export function createProductOperations(
   productsDto: (products: ShopifyProduct[]) => Product[] | null,
   productDto: (product: ShopifySingleProduct) => Product,
   getStoreInfo: () => Promise<ShopInfo>,
-  findProduct: (handle: string) => Promise<Product | null>
+  findProduct: (handle: string) => Promise<Product | null>,
+  ai?: { openRouter?: OpenRouterConfig }
 ): ProductOperations {
   // Use shared formatter from utils
   const cacheExpiryMs = 5 * 60 * 1000; // 5 minutes
@@ -411,13 +428,6 @@ export function createProductOperations(
         throw new Error("Product handle is required and must be a string");
       }
 
-      const apiKey = options?.apiKey || process.env.OPENROUTER_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          "Missing OpenRouter API key. Pass options.apiKey or set OPENROUTER_API_KEY."
-        );
-      }
-
       // Reuse find() for validation and normalized product
       const baseProduct = await operations.find(productHandle);
       if (!baseProduct) {
@@ -428,7 +438,8 @@ export function createProductOperations(
       const handle = baseProduct.handle;
       const { enrichProduct } = await import("./ai/enrich");
       const enriched = await enrichProduct(storeDomain, handle, {
-        apiKey,
+        apiKey: options?.apiKey,
+        openRouter: ai?.openRouter,
         useGfm: options?.useGfm,
         inputType: options?.inputType,
         model: options?.model,
@@ -440,6 +451,32 @@ export function createProductOperations(
         enriched_content: enriched.mergedMarkdown,
       };
     },
+
+    enrichedPrompts: async (
+      productHandle: string,
+      options?: {
+        useGfm?: boolean;
+        inputType?: "markdown" | "html";
+        outputFormat?: "markdown" | "json";
+      }
+    ): Promise<{ system: string; user: string }> => {
+      if (!productHandle || typeof productHandle !== "string") {
+        throw new Error("Product handle is required and must be a string");
+      }
+
+      const baseProduct = await operations.find(productHandle);
+      if (!baseProduct) {
+        throw new Error("Product not found");
+      }
+
+      const handle = baseProduct.handle;
+      const { buildEnrichPromptForProduct } = await import("./ai/enrich");
+      return buildEnrichPromptForProduct(storeDomain, handle, {
+        useGfm: options?.useGfm,
+        inputType: options?.inputType,
+        outputFormat: options?.outputFormat,
+      });
+    },
     classify: async (
       productHandle: string,
       options?: { apiKey?: string; model?: string }
@@ -447,14 +484,8 @@ export function createProductOperations(
       if (!productHandle || typeof productHandle !== "string") {
         throw new Error("Product handle is required and must be a string");
       }
-      const apiKey = options?.apiKey || process.env.OPENROUTER_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          "Missing OpenRouter API key. Pass options.apiKey or set OPENROUTER_API_KEY."
-        );
-      }
       const enrichedProduct = await operations.enriched(productHandle, {
-        apiKey,
+        apiKey: options?.apiKey,
         inputType: "html",
         model: options?.model,
         outputFormat: "json",
@@ -484,10 +515,32 @@ export function createProductOperations(
 
       const { classifyProduct } = await import("./ai/enrich");
       const classification = await classifyProduct(productContent, {
-        apiKey,
+        apiKey: options?.apiKey,
+        openRouter: ai?.openRouter,
         model: options?.model,
       });
       return classification;
+    },
+
+    classifyPrompts: async (
+      productHandle: string,
+      options?: { useGfm?: boolean; inputType?: "markdown" | "html" }
+    ): Promise<{ system: string; user: string }> => {
+      if (!productHandle || typeof productHandle !== "string") {
+        throw new Error("Product handle is required and must be a string");
+      }
+
+      const baseProduct = await operations.find(productHandle);
+      if (!baseProduct) {
+        throw new Error("Product not found");
+      }
+
+      const handle = baseProduct.handle;
+      const { buildClassifyPromptForProduct } = await import("./ai/enrich");
+      return buildClassifyPromptForProduct(storeDomain, handle, {
+        useGfm: options?.useGfm,
+        inputType: options?.inputType,
+      });
     },
 
     generateSEOContent: async (
@@ -496,12 +549,6 @@ export function createProductOperations(
     ): Promise<SEOContent | null> => {
       if (!productHandle || typeof productHandle !== "string") {
         throw new Error("Product handle is required and must be a string");
-      }
-      const apiKey = options?.apiKey || process.env.OPENROUTER_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          "Missing OpenRouter API key. Pass options.apiKey or set OPENROUTER_API_KEY."
-        );
       }
 
       const baseProduct = await operations.find(productHandle);
@@ -519,7 +566,8 @@ export function createProductOperations(
         "./ai/enrich"
       );
       const seo = await generateSEOContentLLM(payload, {
-        apiKey,
+        apiKey: options?.apiKey,
+        openRouter: ai?.openRouter,
         model: options?.model,
       });
       return seo;
@@ -545,10 +593,18 @@ export function createProductOperations(
      */
     showcased: async () => {
       const storeInfo = await getStoreInfo();
+      const normalizedHandles = storeInfo.showcase.products
+        .map((h: string) => h.split("?")[0]?.replace(/^\/|\/$/g, ""))
+        .filter((base): base is string => Boolean(base));
+      const seen = new Set<string>();
+      const uniqueHandles: string[] = [];
+      for (const base of normalizedHandles) {
+        if (seen.has(base)) continue;
+        seen.add(base);
+        uniqueHandles.push(base);
+      }
       const products = await Promise.all(
-        storeInfo.showcase.products.map((productHandle: string) =>
-          findProduct(productHandle)
-        )
+        uniqueHandles.map((productHandle: string) => findProduct(productHandle))
       );
       return filter(products, isNonNullish);
     },
