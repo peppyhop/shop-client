@@ -1,3 +1,9 @@
+## [3.16.0](https://github.com/peppyhop/shop-client/compare/v3.15.0...v3.16.0) (2025-12-30)
+
+### Features
+
+* **products:** add content parameter to skip page fetching ([#36](https://github.com/peppyhop/shop-client/issues/36)) ([478cbb9](https://github.com/peppyhop/shop-client/commit/478cbb96ee65a47dc50bee4838960505ccaa83b8))
+
 ## [3.15.0](https://github.com/peppyhop/shop-client/compare/v3.14.1...v3.15.0) (2025-12-30)
 
 ### Features
