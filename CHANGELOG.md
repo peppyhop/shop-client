@@ -1,3 +1,9 @@
+## [3.15.0](https://github.com/peppyhop/shop-client/compare/v3.14.1...v3.15.0) (2025-12-30)
+
+### Features
+
+* **openrouter:** refactor AI integration to use configurable OpenRouter options ([#35](https://github.com/peppyhop/shop-client/issues/35)) ([87ddb26](https://github.com/peppyhop/shop-client/commit/87ddb2641b132d192275126a8a8cc71924d0d2b6))
+
 ## [3.14.1](https://github.com/peppyhop/shop-client/compare/v3.14.0...v3.14.1) (2025-12-19)
 
 ## [3.14.0](https://github.com/peppyhop/shop-client/compare/v3.13.0...v3.14.0) (2025-12-17)
