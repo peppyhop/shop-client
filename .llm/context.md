@@ -37,7 +37,8 @@ The main orchestrator class that provides a unified interface to all library fun
 - Method: `determineStoreType(options?)`
 - Classifies showcased products using only `product.bodyHtml` (no images or external text).
 - Aggregates per-product results into a multi-audience breakdown of verticals.
-- Online mode requires `OPENROUTER_API_KEY`; otherwise falls back to regex heuristics.
+- Online mode requires an OpenRouter API key (via `ShopClient` options or per-call `apiKey`).
+- Offline mode uses regex heuristics when `openRouter.offline` is enabled.
 - Applies pruning based on store-level signals (title and description) for consistency.
 
 ### 2. ProductOperations (`src/products.ts`)

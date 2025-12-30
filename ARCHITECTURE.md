@@ -222,8 +222,8 @@ Determines the store’s audiences and verticals using showcased products.
 - Input source: `StoreInfo.showcase.products` (handles → products via `products.find`).
 - Text basis: strictly `product.bodyHtml` for each showcased product.
 - Sampling: random sample up to `maxShowcaseProducts` (default 10, max 50).
-- Online mode: calls classification via an LLM when `OPENROUTER_API_KEY` is present.
-- Offline mode: regex heuristics on `body_html` when API key absent or `OPENROUTER_OFFLINE=1`.
+- Online mode: calls classification via an LLM when an OpenRouter API key is provided (via `ShopClient` options or per-call `apiKey`).
+- Offline mode: regex heuristics when `openRouter.offline` is enabled.
 - Aggregation: per-product audience/vertical merged into `StoreTypeBreakdown`.
 - Pruning: `pruneBreakdownForSignals` applies store-level signals (title/description) to reduce noise.
 

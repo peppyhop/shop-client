@@ -10,7 +10,9 @@ async function advancedUsageExample() {
   });
 
   // Initialize the shop client with anuki.in domain
-  const shop = new ShopClient("https://anuki.in");
+  const shop = new ShopClient("https://anuki.in", {
+    openRouter: { apiKey: "YOUR_OPENROUTER_API_KEY", model: "openai/gpt-4o-mini" },
+  });
 
   try {
     console.log("🚀 Advanced Shop Client Library Example");
@@ -193,10 +195,7 @@ async function advancedUsageExample() {
         }
       }
 
-      // Generate enriched content with provider/model configuration
       const enriched = await shop.products.enriched(productHandle, {
-        model: process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini",
-        apiKey: process.env.OPENROUTER_API_KEY,
         inputType: "markdown",
       });
       console.log(

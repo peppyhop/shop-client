@@ -1,5 +1,5 @@
 import type { ShopInfo } from "../store";
-import type { StoreTypeBreakdown } from "../types";
+import type { OpenRouterConfig, StoreTypeBreakdown } from "../types";
 import { determineStoreType as determineStoreTypeViaLLM } from "./enrich";
 
 type Args = {
@@ -8,6 +8,7 @@ type Args = {
   findProduct: (handle: string) => Promise<unknown>;
   apiKey?: string;
   model?: string;
+  openRouter?: OpenRouterConfig;
   maxShowcaseProducts?: number;
   maxShowcaseCollections?: number;
 };
@@ -46,7 +47,7 @@ export async function determineStoreTypeForStore(
         collections: collectionsSample,
       },
     },
-    { apiKey: args.apiKey, model: args.model }
+    { apiKey: args.apiKey, model: args.model, openRouter: args.openRouter }
   );
 
   return breakdown as StoreTypeBreakdown;

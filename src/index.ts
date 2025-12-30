@@ -12,6 +12,7 @@ import type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
 import { createShopOperations } from "./store";
 import type {
   Collection,
+  OpenRouterConfig,
   Product,
   ShopifyCollection,
   ShopifyProduct,
@@ -39,12 +40,14 @@ import { rateLimitedFetch } from "./utils/rate-limit";
  */
 export type ShopClientOptions = {
   cacheTTL?: number; // milliseconds for validation + info cache entries
+  openRouter?: OpenRouterConfig;
 };
 
 export class ShopClient {
   private storeDomain: string;
   private baseUrl: string;
   private storeSlug: string;
+  private openRouter?: OpenRouterConfig;
   private validationCache: Map<string, boolean> = new Map();
   private cacheExpiry: number = 5 * 60 * 1000; // 5 minutes
   private cacheTimestamps: Map<string, number> = new Map();
@@ -152,6 +155,7 @@ export class ShopClient {
     if (typeof options?.cacheTTL === "number" && options.cacheTTL > 0) {
       this.cacheExpiry = options.cacheTTL;
     }
+    this.openRouter = options?.openRouter;
 
     // Initialize operations
     this.shopOperations = createShopOperations({
@@ -170,7 +174,8 @@ export class ShopClient {
       this.productsDto.bind(this),
       this.productDto.bind(this),
       () => this.getInfo(),
-      (handle: string) => this.products.find(handle)
+      (handle: string) => this.products.find(handle),
+      { openRouter: this.openRouter }
     );
 
     this.collections = createCollectionOperations(
@@ -685,12 +690,14 @@ export class ShopClient {
     maxShowcaseCollections?: number;
   }): Promise<StoreTypeBreakdown> {
     try {
+      const openRouter = this.openRouter;
       const breakdown = await determineStoreTypeForStore({
         baseUrl: this.baseUrl,
         getInfo: () => this.getInfo(),
         findProduct: (handle: string) => this.products.find(handle),
         apiKey: options?.apiKey,
         model: options?.model,
+        openRouter,
         maxShowcaseProducts: options?.maxShowcaseProducts,
         maxShowcaseCollections: options?.maxShowcaseCollections,
       });
@@ -716,6 +723,7 @@ export type {
   LocalizedPricing,
   MetaTag,
   Product,
+  OpenRouterConfig,
   ProductImage,
   ProductOption,
   ProductVariant,

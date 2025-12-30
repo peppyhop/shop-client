@@ -12,6 +12,21 @@ type RequireAtLeastOne<T> = {
   [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>>;
 }[keyof T];
 
+export type OpenRouterConfig = {
+  apiKey?: string;
+  model?: string;
+  fallbackModels?: string[];
+  baseUrl?: string;
+  siteUrl?: string;
+  appTitle?: string;
+  offline?: boolean;
+};
+
+export type SystemUserPrompt = {
+  system: string;
+  user: string;
+};
+
 /**
  * Supported audience demographics for product categorization.
  */

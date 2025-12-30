@@ -37,9 +37,6 @@ describe("products.classify", () => {
 
   beforeEach(() => {
     jest.restoreAllMocks();
-    delete (process.env as any).OPENROUTER_OFFLINE;
-    delete (process.env as any).OPENROUTER_FALLBACK_MODELS;
-    delete (process.env as any).OPENROUTER_MODEL;
   });
 
   test("classifies product using enriched JSON -> summary -> classification", async () => {
@@ -72,7 +69,8 @@ describe("products.classify", () => {
       // OpenRouter chat completions
       if (url.includes("openrouter.ai") && init?.method === "POST") {
         const body = JSON.parse(init!.body);
-        const content: string = body?.messages?.[0]?.content ?? "";
+        const content: string =
+          body?.messages?.find((m: any) => m?.role === "user")?.content ?? "";
         // Return merge structured JSON when prompt hints at materials schema
         if (typeof content === "string" && content.includes("\"materials\"")) {
           return { ok: true, json: async () => ({ choices: [{ message: { content: mergeJson } }] }) } as any;
@@ -89,7 +87,6 @@ describe("products.classify", () => {
   });
 
   test("offline mode returns deterministic mock classification", async () => {
-    process.env.OPENROUTER_OFFLINE = "1";
     (global as any).fetch = jest.fn(async (input: any) => {
       const url = typeof input === "string" ? input : input?.url ?? "";
       if (url.includes(`/products/${handle}.js`)) {
@@ -101,15 +98,14 @@ describe("products.classify", () => {
       return { ok: false, status: 404 } as any;
     });
 
-    const shop = new ShopClient(`https://${domain}`);
+    const shop = new ShopClient(`https://${domain}`, {
+      openRouter: { offline: true },
+    });
     const res = await shop.products.classify(handle, { apiKey: "any" });
     expect(res).toEqual({ audience: "generic", vertical: "clothing", category: null, subCategory: null });
   });
 
   test("falls back to alternative model on 5xx provider error", async () => {
-    process.env.OPENROUTER_FALLBACK_MODELS = "modelB";
-    process.env.OPENROUTER_MODEL = "modelDefault";
-
     const mergeJson = JSON.stringify({ title: null, description: null, materials: [], care: [], fit: null, images: null, returnPolicy: null });
     const classificationJson = JSON.stringify({ audience: "generic", vertical: "clothing", category: null, subCategory: null });
 
@@ -124,7 +120,8 @@ describe("products.classify", () => {
       if (url.includes("openrouter.ai") && init?.method === "POST") {
         const body = JSON.parse(init!.body);
         const m = body?.model;
-        const content: string = body?.messages?.[0]?.content ?? "";
+        const content: string =
+          body?.messages?.find((mm: any) => mm?.role === "user")?.content ?? "";
         // Simulate 502 on primary model to trigger fallback
         if (m === "modelA") {
           return { ok: false, status: 502, text: async () => JSON.stringify({ error: { message: "Internal server error" } }) } as any;
@@ -138,7 +135,9 @@ describe("products.classify", () => {
       return { ok: false, status: 404 } as any;
     });
 
-    const shop = new ShopClient(`https://${domain}`);
+    const shop = new ShopClient(`https://${domain}`, {
+      openRouter: { fallbackModels: ["modelB"], model: "modelDefault" },
+    });
     const res = await shop.products.classify(handle, { apiKey: "key", model: "modelA" });
     expect(res).toEqual({ audience: "generic", vertical: "clothing", category: null, subCategory: null });
   });

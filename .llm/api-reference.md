@@ -115,7 +115,7 @@ async determineStoreType(options?: {
 Infers the store’s audiences and verticals by classifying showcased products using only `product.bodyHtml`. Aggregates per-product classifications into a multi-audience breakdown and prunes results with store-level signals.
 
 **Parameters:**
-- `apiKey` (string, optional): OpenRouter API key for online classification. If omitted or `OPENROUTER_OFFLINE=1`, uses offline heuristics.
+- `apiKey` (string, optional): OpenRouter API key override for this call. If omitted, uses `ShopClientOptions.openRouter.apiKey`.
 - `model` (string, optional): Model name for online classification.
 - `maxShowcaseProducts` (number, optional): Sample size for showcased products (default: 10, max: 50).
 - `maxShowcaseCollections` (number, optional): Ignored for classification; kept for API symmetry.
@@ -133,11 +133,13 @@ type StoreTypeBreakdown = Partial<
 
 **Example:**
 ```typescript
-const breakdown = await shop.determineStoreType({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  model: 'openai/gpt-4o-mini',
-  maxShowcaseProducts: 12,
+import { ShopClient } from 'shop-client';
+
+const shop = new ShopClient('anuki.in', {
+  openRouter: { apiKey: 'YOUR_OPENROUTER_API_KEY', model: 'openai/gpt-4o-mini' },
 });
+
+const breakdown = await shop.determineStoreType({ maxShowcaseProducts: 12 });
 // { generic: { accessories: ['general'] }, adult_female: { clothing: ['dresses'] } }
 ```
 
