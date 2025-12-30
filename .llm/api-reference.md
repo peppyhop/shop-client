@@ -247,6 +247,28 @@ Fetches products featured on the store's homepage.
 const featuredProducts = await shop.products.showcased();
 ```
 
+### infoHtml()
+
+```typescript
+async infoHtml(productHandle: string, content?: string): Promise<string | null>
+```
+
+Fetches the extracted HTML content from the product page. This is useful for getting the main product description and content directly from the page HTML.
+
+**Parameters:**
+- `productHandle` (string): The product handle
+- `content` (string, optional): HTML content to extract from. If provided, skips fetching the product page.
+
+**Returns:** Promise resolving to extracted HTML content or null if not found
+
+**Example:**
+```typescript
+const html = await shop.products.infoHtml('awesome-t-shirt');
+
+// With provided content
+const htmlFromContent = await shop.products.infoHtml('awesome-t-shirt', '<html>...</html>');
+```
+
 ### filter()
 
 ```typescript
@@ -262,6 +284,95 @@ Extracts available filter options from all product variants (e.g., sizes, colors
 const filters = await shop.products.filter();
 // Returns: { "Size": ["S", "M", "L"], "Color": ["Red", "Blue", "Green"] }
 ```
+
+### enriched(productHandle: string, options?)
+
+```typescript
+async enriched(
+  productHandle: string,
+  options?: {
+    apiKey?: string;
+    useGfm?: boolean;
+    inputType?: "markdown" | "html";
+    model?: string;
+    outputFormat?: "markdown" | "json";
+    content?: string;
+  }
+): Promise<Product | null>
+```
+
+Merges product details from the API and the web page (or provided content) into a meaningful description.
+
+**Parameters:**
+- `productHandle` (string): The product handle
+- `options.content` (string, optional): HTML content to use instead of fetching the product page.
+- `options.outputFormat` (string, optional): "markdown" or "json" (default: "markdown").
+
+**Returns:** Promise resolving to a Product object with `enriched_content` field.
+
+### classify(productHandle: string, options?)
+
+```typescript
+async classify(
+  productHandle: string,
+  options?: {
+    apiKey?: string;
+    model?: string;
+    content?: string;
+  }
+): Promise<ProductClassification | null>
+```
+
+Classifies a product into structured categories (audience, vertical, etc.) using AI.
+
+**Parameters:**
+- `productHandle` (string): The product handle
+- `options.content` (string, optional): HTML content to use instead of fetching the product page.
+
+**Returns:** Promise resolving to `ProductClassification` object or null.
+
+### enrichedPrompts(productHandle: string, options?)
+
+```typescript
+async enrichedPrompts(
+  productHandle: string,
+  options?: {
+    useGfm?: boolean;
+    inputType?: "markdown" | "html";
+    outputFormat?: "markdown" | "json";
+    content?: string;
+  }
+): Promise<{ system: string; user: string }>
+```
+
+Generates the system and user prompts used for enrichment without calling the LLM.
+
+**Parameters:**
+- `productHandle` (string): The product handle
+- `options.content` (string, optional): HTML content to use.
+
+**Returns:** Object containing `system` and `user` prompt strings.
+
+### classifyPrompts(productHandle: string, options?)
+
+```typescript
+async classifyPrompts(
+  productHandle: string,
+  options?: {
+    useGfm?: boolean;
+    inputType?: "markdown" | "html";
+    content?: string;
+  }
+): Promise<{ system: string; user: string }>
+```
+
+Generates the system and user prompts used for classification without calling the LLM.
+
+**Parameters:**
+- `productHandle` (string): The product handle
+- `options.content` (string, optional): HTML content to use.
+
+**Returns:** Object containing `system` and `user` prompt strings.
 
 ## CollectionOperations
 

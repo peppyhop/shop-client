@@ -52,6 +52,7 @@ export interface ProductOperations {
       inputType?: "markdown" | "html";
       model?: string;
       outputFormat?: "markdown" | "json";
+      content?: string;
     }
   ): Promise<Product | null>;
 
@@ -61,17 +62,22 @@ export interface ProductOperations {
       useGfm?: boolean;
       inputType?: "markdown" | "html";
       outputFormat?: "markdown" | "json";
+      content?: string;
     }
   ): Promise<{ system: string; user: string }>;
 
   classify(
     productHandle: string,
-    options?: { apiKey?: string; model?: string }
+    options?: { apiKey?: string; model?: string; content?: string }
   ): Promise<ProductClassification | null>;
 
   classifyPrompts(
     productHandle: string,
-    options?: { useGfm?: boolean; inputType?: "markdown" | "html" }
+    options?: {
+      useGfm?: boolean;
+      inputType?: "markdown" | "html";
+      content?: string;
+    }
   ): Promise<{ system: string; user: string }>;
 
   /**
@@ -81,6 +87,13 @@ export interface ProductOperations {
     productHandle: string,
     options?: { apiKey?: string; model?: string }
   ): Promise<SEOContent | null>;
+
+  /**
+   * Fetches the extracted HTML content from the product page.
+   * This is useful for getting the main product description and content directly from the page HTML.
+   * If content is provided, it is used directly to extract the main section.
+   */
+  infoHtml(productHandle: string, content?: string): Promise<string | null>;
 
   /**
    * Fetches products that are showcased/featured on the store's homepage.
@@ -422,6 +435,7 @@ export function createProductOperations(
         inputType?: "markdown" | "html";
         model?: string;
         outputFormat?: "markdown" | "json";
+        content?: string;
       }
     ): Promise<Product | null> => {
       if (!productHandle || typeof productHandle !== "string") {
@@ -444,6 +458,7 @@ export function createProductOperations(
         inputType: options?.inputType,
         model: options?.model,
         outputFormat: options?.outputFormat,
+        htmlContent: options?.content,
       });
 
       return {
@@ -458,6 +473,7 @@ export function createProductOperations(
         useGfm?: boolean;
         inputType?: "markdown" | "html";
         outputFormat?: "markdown" | "json";
+        content?: string;
       }
     ): Promise<{ system: string; user: string }> => {
       if (!productHandle || typeof productHandle !== "string") {
@@ -475,11 +491,12 @@ export function createProductOperations(
         useGfm: options?.useGfm,
         inputType: options?.inputType,
         outputFormat: options?.outputFormat,
+        htmlContent: options?.content,
       });
     },
     classify: async (
       productHandle: string,
-      options?: { apiKey?: string; model?: string }
+      options?: { apiKey?: string; model?: string; content?: string }
     ): Promise<ProductClassification | null> => {
       if (!productHandle || typeof productHandle !== "string") {
         throw new Error("Product handle is required and must be a string");
@@ -489,6 +506,7 @@ export function createProductOperations(
         inputType: "html",
         model: options?.model,
         outputFormat: "json",
+        content: options?.content,
       });
       if (!enrichedProduct || !enrichedProduct.enriched_content) return null;
 
@@ -524,7 +542,11 @@ export function createProductOperations(
 
     classifyPrompts: async (
       productHandle: string,
-      options?: { useGfm?: boolean; inputType?: "markdown" | "html" }
+      options?: {
+        useGfm?: boolean;
+        inputType?: "markdown" | "html";
+        content?: string;
+      }
     ): Promise<{ system: string; user: string }> => {
       if (!productHandle || typeof productHandle !== "string") {
         throw new Error("Product handle is required and must be a string");
@@ -540,6 +562,7 @@ export function createProductOperations(
       return buildClassifyPromptForProduct(storeDomain, handle, {
         useGfm: options?.useGfm,
         inputType: options?.inputType,
+        htmlContent: options?.content,
       });
     },
 
@@ -562,15 +585,59 @@ export function createProductOperations(
         tags: baseProduct.tags,
       };
 
-      const { generateSEOContent: generateSEOContentLLM } = await import(
-        "./ai/enrich"
-      );
+      const {
+        extractMainSection,
+        fetchAjaxProduct,
+        fetchProductPage,
+        generateSEOContent: generateSEOContentLLM,
+        mergeWithLLM,
+      } = await import("./ai/enrich");
       const seo = await generateSEOContentLLM(payload, {
         apiKey: options?.apiKey,
         openRouter: ai?.openRouter,
         model: options?.model,
       });
       return seo;
+    },
+
+    /**
+     * Fetches the extracted HTML content from the product page.
+     * This is useful for getting the main product description and content directly from the page HTML.
+     *
+     * @param productHandle - The handle of the product
+     * @param content - Optional HTML content to extract from. If provided, skips fetching the product page.
+     * @returns {Promise<string | null>} The extracted HTML content or null if not found
+     *
+     * @example
+     * ```typescript
+     * // Fetch from store
+     * const html = await shop.products.infoHtml("product-handle");
+     *
+     * // Use provided HTML
+     * const htmlFromContent = await shop.products.infoHtml("product-handle", "<html>...</html>");
+     * ```
+     */
+    infoHtml: async (
+      productHandle: string,
+      content?: string
+    ): Promise<string | null> => {
+      if (!productHandle || typeof productHandle !== "string") {
+        throw new Error("Product handle is required and must be a string");
+      }
+
+      const { extractMainSection, fetchProductPage } = await import(
+        "./ai/enrich"
+      );
+
+      if (content) {
+        return extractMainSection(content);
+      }
+
+      const baseProduct = await operations.find(productHandle);
+      if (!baseProduct) return null;
+
+      const pageHtml = await fetchProductPage(storeDomain, baseProduct.handle);
+      return extractMainSection(pageHtml);
     },
 
     /**

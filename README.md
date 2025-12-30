@@ -409,6 +409,24 @@ const showcasedProducts = await shop.products.showcased();
 
 **Returns:** `Product[]` - Array of featured products
 
+#### `products.infoHtml(productHandle, content?)`
+
+Fetches the extracted HTML content from the product page. This is useful for getting the main product description and content directly from the page HTML.
+
+```typescript
+// Fetch from store
+const html = await shop.products.infoHtml("product-handle");
+
+// Use provided HTML
+const htmlFromContent = await shop.products.infoHtml("product-handle", "<html>...</html>");
+```
+
+**Parameters:**
+- `productHandle` (string): The product handle
+- `content` (string, optional): HTML content to extract from. If provided, skips fetching the product page.
+
+**Returns:** `Promise<string | null>` - Extracted HTML content or null if not found
+
 #### `products.filter()`
 
 Creates a map of variant options and their distinct values from all products in the store. This is useful for building filter interfaces, search facets, and product option selectors.
@@ -739,6 +757,12 @@ const enrichedMarkdown = await shop.products.enriched('some-product-handle', {
 });
 // enrichedMarkdown?.enriched_content → markdown
 
+// Use provided content instead of fetching product page
+const enrichedFromContent = await shop.products.enriched('some-product-handle', {
+  outputFormat: 'markdown',
+  content: '<html>...</html>',
+});
+
 const enrichedJson = await shop.products.enriched('some-product-handle', {
   outputFormat: 'json',
 });
@@ -747,6 +771,7 @@ const enrichedJson = await shop.products.enriched('some-product-handle', {
 // Build prompts without calling the LLM (useful for debugging)
 const { system, user } = await shop.products.enrichedPrompts('some-product-handle', {
   outputFormat: 'markdown',
+  content: '<html>...</html>', // Optional content
 });
 ```
 

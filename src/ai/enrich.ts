@@ -235,11 +235,17 @@ export async function buildEnrichPromptForProduct(
     useGfm?: boolean;
     inputType?: "markdown" | "html";
     outputFormat?: "markdown" | "json";
+    htmlContent?: string;
   }
 ): Promise<SystemUserPrompt> {
+  const ajaxProductPromise = fetchAjaxProduct(domain, handle);
+  const pageHtmlPromise = options?.htmlContent
+    ? Promise.resolve(options.htmlContent)
+    : fetchProductPage(domain, handle);
+
   const [ajaxProduct, pageHtml] = await Promise.all([
-    fetchAjaxProduct(domain, handle),
-    fetchProductPage(domain, handle),
+    ajaxProductPromise,
+    pageHtmlPromise,
   ]);
   const bodyHtml = ajaxProduct.description || "";
   const extractedHtml = extractMainSection(pageHtml);
@@ -263,11 +269,20 @@ export async function buildEnrichPromptForProduct(
 export async function buildClassifyPromptForProduct(
   domain: string,
   handle: string,
-  options?: { useGfm?: boolean; inputType?: "markdown" | "html" }
+  options?: {
+    useGfm?: boolean;
+    inputType?: "markdown" | "html";
+    htmlContent?: string;
+  }
 ): Promise<SystemUserPrompt> {
+  const ajaxProductPromise = fetchAjaxProduct(domain, handle);
+  const pageHtmlPromise = options?.htmlContent
+    ? Promise.resolve(options.htmlContent)
+    : fetchProductPage(domain, handle);
+
   const [ajaxProduct, pageHtml] = await Promise.all([
-    fetchAjaxProduct(domain, handle),
-    fetchProductPage(domain, handle),
+    ajaxProductPromise,
+    pageHtmlPromise,
   ]);
   const bodyHtml = ajaxProduct.description || "";
   const extractedHtml = extractMainSection(pageHtml);
@@ -674,12 +689,18 @@ export async function enrichProduct(
     model?: string;
     outputFormat?: "markdown" | "json";
     openRouter?: OpenRouterConfig;
+    htmlContent?: string;
   }
 ): Promise<EnrichedProductResult> {
   // STEP 1: Fetch Shopify single product (AJAX) and use its description
+  const ajaxProductPromise = fetchAjaxProduct(domain, handle);
+  const pageHtmlPromise = options?.htmlContent
+    ? Promise.resolve(options.htmlContent)
+    : fetchProductPage(domain, handle);
+
   const [ajaxProduct, pageHtml] = await Promise.all([
-    fetchAjaxProduct(domain, handle),
-    fetchProductPage(domain, handle),
+    ajaxProductPromise,
+    pageHtmlPromise,
   ]);
   const bodyHtml = ajaxProduct.description || "";
 
