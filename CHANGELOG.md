@@ -1,3 +1,9 @@
+## [3.18.0](https://github.com/peppyhop/shop-client/compare/v3.17.0...v3.18.0) (2025-12-31)
+
+### Features
+
+* **products:** add enhanced product search with AI enrichment ([#38](https://github.com/peppyhop/shop-client/issues/38)) ([383a6e2](https://github.com/peppyhop/shop-client/commit/383a6e21c15017c734b0238f05f727907f3737bd))
+
 ## [3.17.0](https://github.com/peppyhop/shop-client/compare/v3.16.0...v3.17.0) (2025-12-31)
 
 ### Features
