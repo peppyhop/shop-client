@@ -3,6 +3,7 @@ import { filter, isNonNullish } from "remeda";
 import type { ShopInfo } from "./store";
 import type {
   CurrencyCode,
+  EnhancedProductResponse,
   MinimalProduct,
   OpenRouterConfig,
   Product,
@@ -43,6 +44,19 @@ export interface ProductOperations {
     productHandle: string,
     options?: { currency?: CurrencyCode }
   ): Promise<Product | null>;
+
+  /**
+   * Finds a product and enhances it with AI-generated content using an external service.
+   *
+   * @param productHandle - The handle of the product to find.
+   * @param options - Options for the request.
+   * @param options.apiKey - API key for the enhancement service.
+   * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
+   */
+  findEnhanced(
+    productHandle: string,
+    options?: { apiKey?: string; endpoint?: string }
+  ): Promise<EnhancedProductResponse | null>;
 
   /**
    * Finds a product by handle and enriches its content using LLM.
@@ -693,6 +707,85 @@ export function createProductOperations(
     return finalProducts ?? [];
   }
 
+  async function findEnhancedInternal(
+    productHandle: string,
+    options?: { apiKey?: string; endpoint?: string }
+  ): Promise<EnhancedProductResponse | null> {
+    const apiKey = options?.apiKey;
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      throw new Error("apiKey is required");
+    }
+
+    const baseProduct = await findInternal(productHandle, { minimal: false });
+    if (!baseProduct) return null;
+
+    let updatedAt = baseProduct.updatedAt?.toISOString();
+    if (updatedAt?.endsWith(".000Z")) {
+      updatedAt = updatedAt.replace(".000Z", "Z");
+    }
+    if (!updatedAt) {
+      const url = `${baseUrl}products/${encodeURIComponent(baseProduct.handle)}.js`;
+      const resp = await rateLimitedFetch(url, {
+        rateLimitClass: "products:single",
+        timeoutMs: 7000,
+        retry: { maxRetries: 1, baseDelayMs: 200 },
+      });
+      if (!resp.ok) {
+        if (resp.status === 404) return null;
+        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      }
+      const raw = (await resp.json()) as ShopifySingleProduct;
+      if (typeof raw.updated_at === "string" && raw.updated_at.trim()) {
+        updatedAt = raw.updated_at;
+      } else {
+        throw new Error("updatedAt missing for product");
+      }
+    }
+
+    const endpoint =
+      (typeof options?.endpoint === "string" && options.endpoint.trim()) ||
+      "https://shopify-product-enrichment-worker.ninjacode.workers.dev";
+
+    let hostname = storeDomain;
+    try {
+      hostname = new URL(storeDomain).hostname;
+    } catch {
+      hostname = storeDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    }
+
+    const resp = await rateLimitedFetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        storeDomain: hostname,
+        handle: baseProduct.handle,
+        updatedAt,
+      }),
+      rateLimitClass: "products:enhanced",
+      timeoutMs: 15000,
+      retry: {
+        maxRetries: 2,
+        baseDelayMs: 300,
+        retryOnStatuses: [429, 500, 502, 503, 504],
+      },
+    });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
+    const data: unknown = await resp.json();
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("Invalid enhanced product response");
+    }
+    const o = data as Record<string, unknown>;
+    if (!("shopify" in o) || !("enrichment" in o) || !("cache" in o)) {
+      throw new Error("Invalid enhanced product response");
+    }
+    return data as EnhancedProductResponse;
+  }
+
   const operations: ProductOperations = {
     /**
      * Fetches all products from the store across all pages.
@@ -784,6 +877,12 @@ export function createProductOperations(
         minimal: false,
         currency: options?.currency,
       }),
+
+    findEnhanced: async (
+      productHandle: string,
+      options?: { apiKey?: string; endpoint?: string }
+    ): Promise<EnhancedProductResponse | null> =>
+      findEnhancedInternal(productHandle, options),
 
     /**
      * Enrich a product by generating merged markdown from body_html and product page.
