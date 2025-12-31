@@ -663,6 +663,41 @@ export type SEOContent = {
   marketingCopy: string;
 };
 
+export type EnhancedProductImage = {
+  textContext: string;
+  url: string;
+  alt: string;
+};
+
+export type EnhancedProductCanonical = {
+  title: string;
+  summary: string;
+  highlights: string[];
+  materials: unknown;
+  fit_and_size: unknown;
+  care: unknown;
+  what_makes_it_special: unknown;
+  missing_info: unknown[];
+  images: EnhancedProductImage[];
+};
+
+export type EnhancedProductEnrichment = {
+  canonical: EnhancedProductCanonical;
+  markdown: string;
+};
+
+/**
+ * The response object from the enhanced product search.
+ */
+export type EnhancedProductResponse = {
+  /** The original Shopify product data. */
+  shopify: ShopifyProduct;
+  /** The AI-enriched content. */
+  enrichment: EnhancedProductEnrichment;
+  /** Cache status of the response (e.g., 'hit', 'miss'). */
+  cache: string;
+};
+
 // Store type determination result with reasoning
 export type StoreTypeResult = {
   vertical:
