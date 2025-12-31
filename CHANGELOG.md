@@ -1,3 +1,9 @@
+## [3.17.0](https://github.com/peppyhop/shop-client/compare/v3.16.0...v3.17.0) (2025-12-31)
+
+### Features
+
+* **products:** add minimal product type and support for minimal product returns ([#37](https://github.com/peppyhop/shop-client/issues/37)) ([536c913](https://github.com/peppyhop/shop-client/commit/536c9138b7f77c16f82f0beaeef0dd25f22a7d9d))
+
 ## [3.16.0](https://github.com/peppyhop/shop-client/compare/v3.15.0...v3.16.0) (2025-12-30)
 
 ### Features
