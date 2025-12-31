@@ -7,12 +7,12 @@ export interface RateLimitOptions {
 type Task<T> = {
   fn: () => Promise<T>;
   resolve: (value: T) => void;
-  reject: (reason?: any) => void;
+  reject: (reason?: unknown) => void;
 };
 
 class RateLimiter {
   private options: RateLimitOptions;
-  private queue: Task<any>[] = [];
+  private queue: Task<unknown>[] = [];
   private tokens: number;
   private inFlight = 0;
   private refillTimer: ReturnType<typeof setInterval> | null = null;
@@ -29,11 +29,12 @@ class RateLimiter {
       this.tryRun();
     }, this.options.intervalMs);
     // In some runtimes, timers keep process alive; make it best-effort
-    if (
-      this.refillTimer &&
-      typeof (this.refillTimer as any).unref === "function"
-    ) {
-      (this.refillTimer as any).unref();
+    const t = this.refillTimer as unknown;
+    if (t && typeof t === "object") {
+      const rec = t as Record<string, unknown>;
+      if (typeof rec.unref === "function") {
+        (rec.unref as () => void)();
+      }
     }
   }
 
@@ -58,7 +59,11 @@ class RateLimiter {
     return new Promise<T>((resolve, reject) => {
       // Start the timer lazily on first schedule/use
       this.ensureRefillStarted();
-      this.queue.push({ fn, resolve, reject });
+      this.queue.push({
+        fn: fn as () => Promise<unknown>,
+        resolve: resolve as (value: unknown) => void,
+        reject: reject as (reason?: unknown) => void,
+      });
       this.tryRun();
     });
   }
@@ -117,7 +122,8 @@ function getHost(input: RequestInfo | URL): string | undefined {
       return input.host;
     }
     // Request object or similar
-    const url = (input as any).url as string | undefined;
+    const rec = input as unknown as Record<string, unknown>;
+    const url = typeof rec.url === "string" ? rec.url : undefined;
     if (url) {
       return new URL(url).host;
     }
@@ -228,6 +234,12 @@ export async function rateLimitedFetch(
     ...init,
     signal: hasSignal ? init?.signal : controller?.signal,
   };
+  const {
+    rateLimitClass: _klass,
+    retry: _retry,
+    timeoutMs: _timeoutMs,
+    ...fetchInit
+  } = effInit;
   const klass = init?.rateLimitClass;
   const byClass = klass ? classLimiters.get(klass) : undefined;
   const byHost = getHostLimiter(getHost(input));
@@ -238,15 +250,15 @@ export async function rateLimitedFetch(
   const retryOnStatuses = init?.retry?.retryOnStatuses ?? [429, 503];
 
   let attempt = 0;
-  let lastError: any = null;
+  let lastError: unknown = null;
   let response: Response | null = null;
 
   while (attempt <= maxRetries) {
     try {
       if (eff) {
-        response = await eff.schedule(() => fetch(input as any, effInit));
+        response = await eff.schedule(() => fetch(input, fetchInit));
       } else {
-        response = await fetch(input as any, effInit);
+        response = await fetch(input, fetchInit);
       }
       // If OK or not a retriable status, return immediately
       if (

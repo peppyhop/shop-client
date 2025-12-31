@@ -35,17 +35,64 @@ const TURNDOWN_REMOVE_CLASSNAMES = [
 ];
 const TURNDOWN_REMOVE_NODE_NAMES = ["button", "input", "select", "label"];
 
-let cachedGfmPlugin: any | undefined;
-let gfmPluginPromise: Promise<any> | undefined;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isOneOf<const T extends readonly string[]>(
+  values: T,
+  value: unknown
+): value is T[number] {
+  return (
+    typeof value === "string" && (values as readonly string[]).includes(value)
+  );
+}
+
+function toOptionalStringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function resolveGfmPlugin(mod: unknown): unknown {
+  if (!isRecord(mod)) return mod;
+  const gfm = mod.gfm;
+  if (typeof gfm === "function" || isRecord(gfm)) return gfm;
+  const def = mod.default;
+  if (isRecord(def)) {
+    const defGfm = def.gfm;
+    if (typeof defGfm === "function" || isRecord(defGfm)) return defGfm;
+    return def;
+  }
+  return mod;
+}
+
+function extractOpenRouterContent(data: unknown): string | null {
+  if (!isRecord(data)) return null;
+  const choices = data.choices;
+  if (!Array.isArray(choices) || choices.length === 0) return null;
+  const first = choices[0];
+  if (!isRecord(first)) return null;
+  const message = first.message;
+  if (!isRecord(message)) return null;
+  const content = message.content;
+  return typeof content === "string" ? content : null;
+}
+
+let cachedGfmPlugin: unknown | undefined;
+let gfmPluginPromise: Promise<unknown> | undefined;
 let cachedTurndownPlain: TurndownService | undefined;
 let cachedTurndownGfm: TurndownService | undefined;
 
-async function loadGfmPlugin(): Promise<any> {
+async function loadGfmPlugin(): Promise<unknown> {
   if (cachedGfmPlugin) return cachedGfmPlugin;
   if (gfmPluginPromise) return gfmPluginPromise;
   gfmPluginPromise = import("turndown-plugin-gfm")
-    .then((mod: any) => {
-      const resolved = mod?.gfm ?? mod?.default?.gfm ?? mod?.default ?? mod;
+    .then((mod) => {
+      const resolved = resolveGfmPlugin(mod);
       cachedGfmPlugin = resolved;
       return resolved;
     })
@@ -61,12 +108,12 @@ function configureTurndown(td: TurndownService) {
   }
 
   const removeByClass = (className: string) =>
-    td.remove((node: any) => {
+    td.remove((node) => {
       const cls =
-        typeof node.getAttribute === "function"
-          ? node.getAttribute("class") || ""
+        isRecord(node) && typeof node.getAttribute === "function"
+          ? String(node.getAttribute("class") || "")
           : "";
-      return (cls as string).split(/\s+/).includes(className);
+      return cls.split(/\s+/).includes(className);
     });
   for (const className of TURNDOWN_REMOVE_CLASSNAMES) {
     removeByClass(className);
@@ -81,6 +128,8 @@ async function getTurndownService(useGfm: boolean): Promise<TurndownService> {
   if (useGfm && cachedTurndownGfm) return cachedTurndownGfm;
   if (!useGfm && cachedTurndownPlain) return cachedTurndownPlain;
 
+  type TurndownPluginArg = Parameters<TurndownService["use"]>[0];
+
   const td = new TurndownService({
     headingStyle: "atx",
     codeBlockStyle: "fenced",
@@ -92,7 +141,7 @@ async function getTurndownService(useGfm: boolean): Promise<TurndownService> {
 
   if (useGfm) {
     const gfm = await loadGfmPlugin();
-    if (gfm) td.use(gfm);
+    if (gfm) td.use(gfm as TurndownPluginArg);
   }
 
   configureTurndown(td);
@@ -459,18 +508,21 @@ export async function mergeWithLLM(
       throw new Error(`LLM JSON schema invalid: ${schema.error}`);
     }
 
-    // Sanitize any returned image URLs to avoid product gallery/hero images
-    const value = obj.value as any;
-    if (Array.isArray(value.images)) {
-      const filtered = value.images.filter((url: string) => {
-        if (typeof url !== "string") return false;
-        const u = url.toLowerCase();
-        const looksLikeProductImage = SHOPIFY_PRODUCT_IMAGE_PATTERNS.some((p) =>
-          u.includes(p)
-        );
-        return !looksLikeProductImage;
-      });
-      value.images = filtered.length > 0 ? filtered : null;
+    const value = obj.value;
+    if (isRecord(value)) {
+      const images = value.images;
+      if (Array.isArray(images)) {
+        const filtered = images
+          .filter((url): url is string => typeof url === "string")
+          .filter((url) => {
+            const u = url.toLowerCase();
+            const looksLikeProductImage = SHOPIFY_PRODUCT_IMAGE_PATTERNS.some(
+              (p) => u.includes(p)
+            );
+            return !looksLikeProductImage;
+          });
+        value.images = filtered.length > 0 ? filtered : null;
+      }
     }
     return JSON.stringify(value);
   }
@@ -484,8 +536,8 @@ function safeParseJson(
   try {
     const v = JSON.parse(input);
     return { ok: true, value: v };
-  } catch (err: any) {
-    return { ok: false, error: err?.message || "Failed to parse JSON" };
+  } catch (err) {
+    return { ok: false, error: getErrorMessage(err) || "Failed to parse JSON" };
   }
 }
 
@@ -496,24 +548,38 @@ function validateStructuredJson(
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
     return { ok: false, error: "Top-level must be a JSON object" };
   }
-  const o = obj as any;
+  const o = obj as Record<string, unknown>;
 
   // Optional fields must match expected types when present
-  if ("title" in o && !(o.title === null || typeof o.title === "string")) {
+  if (
+    "title" in o &&
+    !(o.title === null || typeof o.title === "string" || o.title === undefined)
+  ) {
     return { ok: false, error: "title must be null or string" };
   }
   if (
     "description" in o &&
-    !(o.description === null || typeof o.description === "string")
+    !(
+      o.description === null ||
+      typeof o.description === "string" ||
+      o.description === undefined
+    )
   ) {
     return { ok: false, error: "description must be null or string" };
   }
-  if ("fit" in o && !(o.fit === null || typeof o.fit === "string")) {
+  if (
+    "fit" in o &&
+    !(o.fit === null || typeof o.fit === "string" || o.fit === undefined)
+  ) {
     return { ok: false, error: "fit must be null or string" };
   }
   if (
     "returnPolicy" in o &&
-    !(o.returnPolicy === null || typeof o.returnPolicy === "string")
+    !(
+      o.returnPolicy === null ||
+      typeof o.returnPolicy === "string" ||
+      o.returnPolicy === undefined
+    )
   ) {
     return { ok: false, error: "returnPolicy must be null or string" };
   }
@@ -625,14 +691,14 @@ async function callOpenRouter(args: {
           await new Promise((r) => setTimeout(r, 300));
           continue;
         }
-        const data = await response.json();
-        const content = data?.choices?.[0]?.message?.content;
+        const data: unknown = await response.json();
+        const content = extractOpenRouterContent(data);
         if (typeof content === "string") return content;
         // If content missing, still capture and try fallback
         lastErrorText = JSON.stringify(data);
         await new Promise((r) => setTimeout(r, 200));
-      } catch (err: any) {
-        lastErrorText = `${url}: ${err?.message || String(err)}`;
+      } catch (err) {
+        lastErrorText = `${url}: ${getErrorMessage(err)}`;
         await new Promise((r) => setTimeout(r, 200));
       }
     }
@@ -845,7 +911,7 @@ function validateClassification(
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
     return { ok: false, error: "Top-level must be a JSON object" };
   }
-  const o = obj as any;
+  const o = obj as Record<string, unknown>;
 
   const audienceValues = [
     "adult_male",
@@ -854,7 +920,7 @@ function validateClassification(
     "kid_female",
     "generic",
   ] as const;
-  if (typeof o.audience !== "string" || !audienceValues.includes(o.audience)) {
+  if (!isOneOf(audienceValues, o.audience)) {
     return {
       ok: false,
       error:
@@ -869,7 +935,7 @@ function validateClassification(
     "home-decor",
     "food-and-beverages",
   ] as const;
-  if (typeof o.vertical !== "string" || !verticalValues.includes(o.vertical)) {
+  if (!isOneOf(verticalValues, o.vertical)) {
     return {
       ok: false,
       error:
@@ -877,21 +943,27 @@ function validateClassification(
     };
   }
 
-  // Optional fields
   if (
     "category" in o &&
-    !(o.category === null || typeof o.category === "string")
+    !(
+      o.category === null ||
+      typeof o.category === "string" ||
+      o.category === undefined
+    )
   ) {
     return { ok: false, error: "category must be null or string" };
   }
   if (
     "subCategory" in o &&
-    !(o.subCategory === null || typeof o.subCategory === "string")
+    !(
+      o.subCategory === null ||
+      typeof o.subCategory === "string" ||
+      o.subCategory === undefined
+    )
   ) {
     return { ok: false, error: "subCategory must be null or string" };
   }
 
-  // Enforce subCategory format when provided: single word or hyphenated (no spaces)
   if (typeof o.subCategory === "string") {
     const sc = o.subCategory.trim();
     if (!/^[A-Za-z0-9-]+$/.test(sc)) {
@@ -902,17 +974,16 @@ function validateClassification(
     }
   }
 
+  const category = toOptionalStringOrNull(o.category);
+  const subCategory = toOptionalStringOrNull(o.subCategory);
+
   return {
     ok: true,
     value: {
       audience: o.audience,
       vertical: o.vertical,
-      category:
-        typeof o.category === "string" ? o.category : (o.category ?? null),
-      subCategory:
-        typeof o.subCategory === "string"
-          ? o.subCategory
-          : (o.subCategory ?? null),
+      category,
+      subCategory,
     },
   };
 }
@@ -1008,7 +1079,7 @@ function validateSEOContent(
   if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
     return { ok: false, error: "Top-level must be a JSON object" };
   }
-  const o = obj as any;
+  const o = obj as Record<string, unknown>;
   const requiredStrings = [
     "metaTitle",
     "metaDescription",
@@ -1017,7 +1088,8 @@ function validateSEOContent(
     "marketingCopy",
   ];
   for (const key of requiredStrings) {
-    if (typeof o[key] !== "string" || !o[key].trim()) {
+    const v = o[key];
+    if (typeof v !== "string" || !v.trim()) {
       return { ok: false, error: `${key} must be a non-empty string` };
     }
   }
@@ -1073,26 +1145,20 @@ export async function determineStoreType(
   const model = options?.model ?? openRouter?.model ?? DEFAULT_OPENROUTER_MODEL;
 
   // Normalize showcase items to titles for readable prompt content
-  const productLines = (
-    Array.isArray(storeInfo.showcase.products)
-      ? storeInfo.showcase.products.slice(0, 10).map((p: any) => {
-          if (typeof p === "string") return `- ${p}`;
-          const pt =
-            typeof p?.productType === "string" && p.productType.trim()
-              ? p.productType
-              : "N/A";
-          return `- ${String(p?.title || "N/A")}: ${pt}`;
-        })
-      : []
-  ) as string[];
-  const collectionLines = (
-    Array.isArray(storeInfo.showcase.collections)
-      ? storeInfo.showcase.collections.slice(0, 5).map((c: any) => {
-          if (typeof c === "string") return `- ${c}`;
-          return `- ${String(c?.title || "N/A")}`;
-        })
-      : []
-  ) as string[];
+  const productLines = storeInfo.showcase.products.slice(0, 10).map((p) => {
+    if (typeof p === "string") return `- ${p}`;
+    const pt =
+      typeof p.productType === "string" && p.productType.trim()
+        ? p.productType
+        : "N/A";
+    return `- ${String(p.title || "N/A")}: ${pt}`;
+  });
+  const collectionLines = storeInfo.showcase.collections
+    .slice(0, 5)
+    .map((c) => {
+      if (typeof c === "string") return `- ${c}`;
+      return `- ${String(c.title || "N/A")}`;
+    });
 
   const storeContent = `Store Title: ${storeInfo.title}
 Store Description: ${storeInfo.description ?? "N/A"}
@@ -1261,6 +1327,8 @@ function validateStoreTypeBreakdown(obj: unknown):
     "home-decor",
     "food-and-beverages",
   ] as const;
+  const audienceKeySet = new Set<string>(audienceKeys);
+  const verticalKeySet = new Set<string>(verticalKeys);
   const o = obj as Record<string, unknown>;
   const out: Partial<
     Record<
@@ -1273,7 +1341,7 @@ function validateStoreTypeBreakdown(obj: unknown):
     return { ok: false, error: "At least one audience key is required" };
   }
   for (const aKey of keys) {
-    if (!audienceKeys.includes(aKey as any)) {
+    if (!audienceKeySet.has(aKey)) {
       return { ok: false, error: `Invalid audience key: ${aKey}` };
     }
     const vObj = o[aKey];
@@ -1285,14 +1353,15 @@ function validateStoreTypeBreakdown(obj: unknown):
     }
     const vOut: Partial<Record<ProductClassification["vertical"], string[]>> =
       {};
-    for (const vKey of Object.keys(vObj as Record<string, unknown>)) {
-      if (!verticalKeys.includes(vKey as any)) {
+    const vRec = vObj as Record<string, unknown>;
+    for (const vKey of Object.keys(vRec)) {
+      if (!verticalKeySet.has(vKey)) {
         return {
           ok: false,
           error: `Invalid vertical key ${vKey} for audience ${aKey}`,
         };
       }
-      const cats = (vObj as any)[vKey];
+      const cats = vRec[vKey];
       if (
         !Array.isArray(cats) ||
         cats.length === 0 ||
@@ -1378,15 +1447,17 @@ export function pruneBreakdownForSignals(
       Partial<Record<ProductClassification["vertical"], string[]>>
     >
   > = {};
-  for (const [audience, verticals] of Object.entries(breakdown)) {
+  for (const audience of Object.keys(breakdown)) {
     const a = audience as ProductClassification["audience"];
     if (!signaledAudiences.has(a)) continue;
+    const verticals = breakdown[a];
     const vOut: Partial<Record<ProductClassification["vertical"], string[]>> =
       {};
-    for (const [vertical, categories] of Object.entries(verticals || {})) {
+    for (const vertical of Object.keys(verticals || {})) {
       const v = vertical as ProductClassification["vertical"];
       if (!signaledVerticals.has(v)) continue;
-      vOut[v] = categories as string[];
+      const categories = verticals?.[v];
+      if (categories) vOut[v] = categories;
     }
     if (Object.keys(vOut).length > 0) {
       pruned[a] = vOut;

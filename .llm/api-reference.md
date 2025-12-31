@@ -154,10 +154,16 @@ Locale-aware Shopify Ajax predictive search for products.
 - `locale` defaults to `en`; falls back to non-locale on 404/417
 - `unavailableProducts` defaults to `hide`
 - Applies optional `currency` override to returned products
+ - Returns full products; use `shop.products.minimal.predictiveSearch()` for minimal products
 
 ```typescript
-const results = await shop.products.predictiveSearch("dress", { limit: 10, locale: "en" });
+const results = await shop.products.predictiveSearch("dress", {
+  limit: 10,
+  locale: "en",
+});
 ```
+
+**Returns:** `Product[]`
 
 ### recommendations(productId: number, options?)
 
@@ -166,20 +172,26 @@ Product recommendations for a given product ID.
 - `limit`: 1–10 (default 10)
 - `locale`: defaults to `en`
 - Applies optional `currency` override
+ - Returns full products; use `shop.products.minimal.recommendations()` for minimal products
 
 ```typescript
-const recos = await shop.products.recommendations(1234567890, { intent: "related", limit: 6 });
+const recos = await shop.products.recommendations(1234567890, {
+  intent: "related",
+  limit: 6,
+});
 ```
+
+**Returns:** `Product[] | null`
 
 ### all()
 
 ```typescript
-async all(): Promise<Product[] | null>
+async all(options?: { currency?: CurrencyCode }): Promise<Product[] | null>
 ```
 
 Fetches all products from the store with automatic pagination handling.
 
-**Returns:** Promise resolving to array of Product objects or null on error
+**Returns:** Promise resolving to array of `Product`, or null on error
 
 **Example:**
 ```typescript
@@ -192,17 +204,20 @@ if (products) {
 ### paginated()
 
 ```typescript
-async paginated(options?: PaginationOptions): Promise<Product[] | null>
+async paginated(options?: {
+  page?: number;
+  limit?: number;
+  currency?: CurrencyCode;
+}): Promise<Product[] | null>
 ```
 
 Fetches products with manual pagination control.
 
 **Parameters:**
-- `options` (PaginationOptions, optional):
-  - `limit?: number` - Number of products per page (default: 250)
-  - `page?: number` - Page number to fetch (default: 1)
-
-**Returns:** Promise resolving to array of Product objects or null on error
+- `limit?: number` - Number of products per page (default: 250)
+- `page?: number` - Page number to fetch (default: 1)
+- `currency?: CurrencyCode` - Optional currency override
+**Returns:** Promise resolving to array of `Product`, or null on error
 
 **Example:**
 ```typescript
@@ -213,19 +228,19 @@ const secondPage = await shop.products.paginated({ limit: 10, page: 2 });
 ### find()
 
 ```typescript
-async find(handle: string): Promise<Product | null>
+async find(handle: string, options?: { currency?: CurrencyCode }): Promise<Product | null>
 ```
 
 Finds a specific product by its handle (URL-friendly identifier).
 
 **Parameters:**
 - `handle` (string): The product handle
-
-**Returns:** Promise resolving to Product object or null if not found
+**Returns:** Promise resolving to `Product`, or null if not found
 
 **Example:**
 ```typescript
-const product = await shop.products.find('awesome-t-shirt');
+const product = await shop.products.find('awesome-t-shirt'); // Full by default
+const minimal = await shop.products.minimal.find('awesome-t-shirt');
 if (product) {
   console.log(product.title);
   console.log(`$${product.price / 100}`); // Convert cents to dollars
@@ -235,16 +250,31 @@ if (product) {
 ### showcased()
 
 ```typescript
-async showcased(): Promise<Product[] | null>
+async showcased(): Promise<Product[]>
 ```
 
 Fetches products featured on the store's homepage.
 
-**Returns:** Promise resolving to array of featured Product objects or null on error
+**Returns:** Promise resolving to array of `Product`
 
 **Example:**
 ```typescript
 const featuredProducts = await shop.products.showcased();
+```
+
+### showcase.minimal()
+
+```typescript
+async showcase.minimal(): Promise<MinimalProduct[]>
+```
+
+Fetches showcased products as minimal product items.
+
+**Returns:** Promise resolving to array of `MinimalProduct`
+
+**Example:**
+```typescript
+const minimalFeatured = await shop.products.showcase.minimal();
 ```
 
 ### infoHtml()

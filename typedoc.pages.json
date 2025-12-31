@@ -6,6 +6,7 @@
     "src/collections.ts",
     "src/checkout.ts",
     "src/store.ts",
+    "src/types.ts",
     "src/utils/rate-limit.ts"
   ],
   "out": "docs",

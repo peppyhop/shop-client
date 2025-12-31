@@ -1,6 +1,14 @@
-import type { Product, ShopifyProduct, ShopifySingleProduct } from "../types";
+import type {
+  MinimalProduct,
+  Product,
+  ShopifyProduct,
+  ShopifyProductVariant,
+  ShopifySingleProduct,
+  ShopifySingleProductVariant,
+} from "../types";
 import {
   buildVariantOptionsMap,
+  calculateDiscount,
   genProductSlug,
   normalizeKey,
   safeParseDate,
@@ -17,22 +25,20 @@ type Ctx = {
 function mapVariants(
   product: ShopifyProduct | ShopifySingleProduct
 ): NonNullable<Product["variants"]> {
-  const variants = (product as ShopifyProduct).variants ?? [];
-  return variants.map((variant: any) => ({
-    id: variant.id.toString(),
-    platformId: variant.id.toString(),
-    name: variant.name,
-    title: variant.title,
-    option1: variant.option1 || null,
-    option2: variant.option2 || null,
-    option3: variant.option3 || null,
-    options: [variant.option1, variant.option2, variant.option3].filter(
-      Boolean
-    ) as string[],
-    sku: variant.sku || null,
-    requiresShipping: variant.requires_shipping,
-    taxable: variant.taxable,
-    featuredImage: variant.featured_image
+  const toCents = (value: unknown): number => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const n = Number.parseFloat(value);
+      return Number.isFinite(n) ? Math.round(n * 100) : 0;
+    }
+    return 0;
+  };
+
+  const variants = product.variants ?? [];
+  return (
+    variants as Array<ShopifyProductVariant | ShopifySingleProductVariant>
+  ).map((variant) => {
+    const featuredImage = variant.featured_image
       ? {
           id: variant.featured_image.id,
           src: variant.featured_image.src,
@@ -40,38 +46,57 @@ function mapVariants(
           height: variant.featured_image.height,
           position: variant.featured_image.position,
           productId: variant.featured_image.product_id,
-          aspectRatio: variant.featured_image.aspect_ratio || 0,
-          variantIds: variant.featured_image.variant_ids || [],
+          aspectRatio: variant.featured_image.aspect_ratio ?? 0,
+          variantIds: variant.featured_image.variant_ids ?? [],
           createdAt: variant.featured_image.created_at,
           updatedAt: variant.featured_image.updated_at,
           alt: variant.featured_image.alt,
         }
-      : null,
-    available: Boolean(variant.available),
-    price:
-      typeof variant.price === "string"
-        ? Number.parseFloat(variant.price) * 100
-        : variant.price,
-    weightInGrams: variant.weightInGrams ?? variant.grams,
-    compareAtPrice: variant.compare_at_price
-      ? typeof variant.compare_at_price === "string"
-        ? Number.parseFloat(variant.compare_at_price) * 100
-        : variant.compare_at_price
-      : 0,
-    position: variant.position,
-    productId: variant.product_id,
-    createdAt: variant.created_at,
-    updatedAt: variant.updated_at,
-  }));
+      : null;
+
+    return {
+      id: variant.id.toString(),
+      platformId: variant.id.toString(),
+      name: "name" in variant ? variant.name : undefined,
+      title: variant.title,
+      option1: variant.option1 || null,
+      option2: variant.option2 || null,
+      option3: variant.option3 || null,
+      options: [variant.option1, variant.option2, variant.option3].filter(
+        (v): v is string => Boolean(v)
+      ),
+      sku: variant.sku || null,
+      requiresShipping: variant.requires_shipping,
+      taxable: variant.taxable,
+      featuredImage,
+      available:
+        typeof variant.available === "boolean" ? variant.available : true,
+      price: toCents(variant.price),
+      weightInGrams:
+        "weightInGrams" in variant
+          ? variant.weightInGrams
+          : (variant.grams ?? undefined),
+      compareAtPrice: toCents(variant.compare_at_price),
+      position: variant.position,
+      productId: variant.product_id,
+      createdAt: variant.created_at,
+      updatedAt: variant.updated_at,
+      compareAtPriceVaries: false,
+      priceVaries: false,
+    };
+  });
 }
 
 export function mapProductsDto(
   products: ShopifyProduct[] | null,
-  ctx: Ctx
-): Product[] | null {
+  ctx: Ctx,
+  options?: { minimal?: boolean }
+): Product[] | MinimalProduct[] | null {
   if (!products || products.length === 0) return null;
 
-  return products.map((product) => {
+  const isMinimal = options?.minimal ?? true;
+
+  const mapOne = (product: ShopifyProduct) => {
     const optionNames = product.options.map((o) => o.name);
     const variantOptionsMap = buildVariantOptionsMap(
       optionNames,
@@ -99,11 +124,46 @@ export function mapProductsDto(
     const compareAtVaries =
       mappedVariants.length > 1 && compareAtMin !== compareAtMax;
 
-    return {
-      slug: genProductSlug({
-        handle: product.handle,
-        storeDomain: ctx.storeDomain,
-      }),
+    const slug = genProductSlug({
+      handle: product.handle,
+      storeDomain: ctx.storeDomain,
+    });
+    const url = `${ctx.storeDomain}/products/${product.handle}`;
+    const discount = calculateDiscount(priceMin, compareAtMin);
+
+    if (isMinimal) {
+      const minimal: MinimalProduct = {
+        title: product.title,
+        bodyHtml: product.body_html || null,
+        price: priceMin,
+        compareAtPrice: compareAtMin,
+        discount,
+        images: product.images.map((img) => ({
+          src: ctx.normalizeImageUrl(img.src),
+        })),
+        featuredImage: product.images?.[0]?.src
+          ? ctx.normalizeImageUrl(product.images[0].src)
+          : null,
+        available: mappedVariants.some((v) => v.available),
+        localizedPricing: {
+          priceFormatted: ctx.formatPrice(priceMin),
+          compareAtPriceFormatted: ctx.formatPrice(compareAtMin),
+        },
+        options: product.options.map((option) => ({
+          key: normalizeKey(option.name),
+          name: option.name,
+          values: option.values,
+        })),
+        variantOptionsMap,
+        url,
+        slug,
+        platformId: product.id.toString(),
+      };
+      return minimal;
+    }
+
+    const full: Product = {
+      slug,
       handle: product.handle,
       platformId: product.id.toString(),
       title: product.title,
@@ -116,7 +176,7 @@ export function mapProductsDto(
       compareAtPriceMin: compareAtMin,
       compareAtPriceMax: compareAtMax,
       compareAtPriceVaries: compareAtVaries,
-      discount: 0,
+      discount,
       currency: ctx.currency,
       localizedPricing: {
         currency: ctx.currency,
@@ -165,26 +225,70 @@ export function mapProductsDto(
       deletedAt: null,
       storeSlug: ctx.storeSlug,
       storeDomain: ctx.storeDomain,
-      url: `${ctx.storeDomain}/products/${product.handle}`,
-    } as Product;
-  });
+      url,
+    };
+    return full;
+  };
+
+  return isMinimal
+    ? (products.map(mapOne) as MinimalProduct[])
+    : (products.map(mapOne) as Product[]);
 }
 
 export function mapProductDto(
   product: ShopifySingleProduct,
-  ctx: Ctx
-): Product {
+  ctx: Ctx,
+  options?: { minimal?: boolean }
+): Product | MinimalProduct {
+  const isMinimal = options?.minimal ?? true;
   const optionNames = product.options.map((o) => o.name);
   const variantOptionsMap = buildVariantOptionsMap(
     optionNames,
     product.variants
   );
 
+  const slug = genProductSlug({
+    handle: product.handle,
+    storeDomain: ctx.storeDomain,
+  });
+  const url = product.url || `${ctx.storeDomain}/products/${product.handle}`;
+  const discount = calculateDiscount(
+    product.price,
+    product.compare_at_price || 0
+  );
+
+  if (isMinimal) {
+    return {
+      title: product.title,
+      bodyHtml: product.description || null,
+      price: product.price,
+      compareAtPrice: product.compare_at_price || 0,
+      discount,
+      images: Array.isArray(product.images)
+        ? product.images.map((imageSrc) => ({
+            src: ctx.normalizeImageUrl(imageSrc),
+          }))
+        : [],
+      featuredImage: ctx.normalizeImageUrl(product.featured_image),
+      available: product.available,
+      localizedPricing: {
+        priceFormatted: ctx.formatPrice(product.price),
+        compareAtPriceFormatted: ctx.formatPrice(product.compare_at_price || 0),
+      },
+      options: product.options.map((option) => ({
+        key: normalizeKey(option.name),
+        name: option.name,
+        values: option.values,
+      })),
+      variantOptionsMap,
+      url,
+      slug,
+      platformId: product.id.toString(),
+    } as MinimalProduct;
+  }
+
   const mapped: Product = {
-    slug: genProductSlug({
-      handle: product.handle,
-      storeDomain: ctx.storeDomain,
-    }),
+    slug,
     handle: product.handle,
     platformId: product.id.toString(),
     title: product.title,
@@ -197,7 +301,7 @@ export function mapProductDto(
     compareAtPriceMin: product.compare_at_price_min,
     compareAtPriceMax: product.compare_at_price_max,
     compareAtPriceVaries: product.compare_at_price_varies,
-    discount: 0,
+    discount,
     currency: ctx.currency,
     localizedPricing: {
       currency: ctx.currency,
@@ -250,7 +354,7 @@ export function mapProductDto(
     deletedAt: null,
     storeSlug: ctx.storeSlug,
     storeDomain: ctx.storeDomain,
-    url: product.url || `${ctx.storeDomain}/products/${product.handle}`,
+    url,
   };
 
   return mapped;

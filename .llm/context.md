@@ -161,6 +161,9 @@ Key type hierarchies:
 - `showcased()`: Featured products from homepage
 - `filter(criteria)`: Product filtering by various criteria
 
+Notes:
+- Returns full `Product` objects by default; use `shop.products.minimal.*` for `MinimalProduct`.
+
 **Data Flow:**
 1. HTTP request to `/products.json` endpoint
 2. Response parsing and validation
@@ -183,6 +186,9 @@ Key type hierarchies:
 - `showcased()`: Featured collections
 - `products.all(handle)`: All products in collection
 - `products.paginated(handle, options)`: Paginated collection products
+
+Notes:
+- `collections.products.*` returns full `Product` objects by default; use `collections.products.minimal.*` for `MinimalProduct`.
 
 **Data Flow:**
 1. Collections endpoint requests
