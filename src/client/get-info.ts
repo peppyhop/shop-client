@@ -273,9 +273,9 @@ export async function getInfoForShop(
       subDomain: myShopifySubdomain ?? null,
     },
     country: countryDetection.country,
-    currency: (countryDetection as any)?.currencyCode || null,
+    currency: countryDetection.currencyCode ?? null,
   };
 
-  const currencyCode = (countryDetection as any)?.currencyCode;
+  const currencyCode = countryDetection.currencyCode;
   return { info, currencyCode };
 }

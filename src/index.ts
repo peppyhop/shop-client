@@ -12,6 +12,7 @@ import type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
 import { createShopOperations } from "./store";
 import type {
   Collection,
+  MinimalProduct,
   OpenRouterConfig,
   Product,
   ShopifyCollection,
@@ -227,24 +228,38 @@ export class ShopClient {
   /**
    * Transform Shopify products to our Product format
    */
-  productsDto(products: ShopifyProduct[]): Product[] | null {
-    return mapProductsDto(products, {
-      storeDomain: this.storeDomain,
-      storeSlug: this.storeSlug,
-      currency: this.storeCurrency ?? "USD",
-      normalizeImageUrl: (url) => this.normalizeImageUrl(url),
-      formatPrice: (amount) => this.formatPrice(amount),
-    });
+  productsDto(
+    products: ShopifyProduct[],
+    options?: { minimal?: boolean }
+  ): Product[] | MinimalProduct[] | null {
+    return mapProductsDto(
+      products,
+      {
+        storeDomain: this.storeDomain,
+        storeSlug: this.storeSlug,
+        currency: this.storeCurrency ?? "USD",
+        normalizeImageUrl: (url) => this.normalizeImageUrl(url),
+        formatPrice: (amount) => this.formatPrice(amount),
+      },
+      { minimal: options?.minimal ?? false }
+    );
   }
 
-  productDto(product: ShopifySingleProduct): Product {
-    return mapProductDto(product, {
-      storeDomain: this.storeDomain,
-      storeSlug: this.storeSlug,
-      currency: this.storeCurrency ?? "USD",
-      normalizeImageUrl: (url) => this.normalizeImageUrl(url),
-      formatPrice: (amount) => this.formatPrice(amount),
-    });
+  productDto(
+    product: ShopifySingleProduct,
+    options?: { minimal?: boolean }
+  ): Product | MinimalProduct {
+    return mapProductDto(
+      product,
+      {
+        storeDomain: this.storeDomain,
+        storeSlug: this.storeSlug,
+        currency: this.storeCurrency ?? "USD",
+        normalizeImageUrl: (url) => this.normalizeImageUrl(url),
+        formatPrice: (amount) => this.formatPrice(amount),
+      },
+      { minimal: options?.minimal ?? false }
+    );
   }
 
   collectionsDto(collections: ShopifyCollection[]): Collection[] {
@@ -259,16 +274,27 @@ export class ShopClient {
     context: string,
     url: string
   ): never {
+    type EnhancedError = Error & {
+      context: string;
+      url: string;
+      statusCode?: number;
+      originalError: unknown;
+    };
+
+    const getStatus = (err: unknown): number | undefined => {
+      if (!err || typeof err !== "object") return undefined;
+      const rec = err as Record<string, unknown>;
+      const status = rec.status;
+      return typeof status === "number" ? status : undefined;
+    };
+
     let errorMessage = `Error ${context}`;
     let statusCode: number | undefined;
 
     if (error instanceof Error) {
       errorMessage += `: ${error.message}`;
       // Check if it's a fetch error with response-like status
-      const anyErr = error as any;
-      if (anyErr && typeof anyErr.status === "number") {
-        statusCode = anyErr.status as number;
-      }
+      statusCode = getStatus(error);
     } else if (typeof error === "string") {
       errorMessage += `: ${error}`;
     } else {
@@ -278,17 +304,21 @@ export class ShopClient {
     // Add URL context for debugging
     errorMessage += ` (URL: ${url})`;
 
-    // Add status code if available
     if (statusCode) {
+      // Add status code if available
       errorMessage += ` (Status: ${statusCode})`;
     }
 
     // Create enhanced error with additional properties
-    const enhancedError = new Error(errorMessage);
-    (enhancedError as any).context = context;
-    (enhancedError as any).url = url;
-    (enhancedError as any).statusCode = statusCode;
-    (enhancedError as any).originalError = error;
+    const enhancedError: EnhancedError = Object.assign(
+      new Error(errorMessage),
+      {
+        context,
+        url,
+        statusCode,
+        originalError: error,
+      }
+    );
 
     throw enhancedError;
   }
@@ -298,8 +328,9 @@ export class ShopClient {
    */
   private async fetchProducts(
     page: number,
-    limit: number
-  ): Promise<Product[] | null> {
+    limit: number,
+    options?: { minimal?: boolean }
+  ): Promise<Product[] | MinimalProduct[] | null> {
     try {
       const url = `${this.baseUrl}products.json?page=${page}&limit=${limit}`;
       const response = await rateLimitedFetch(url, {
@@ -311,7 +342,9 @@ export class ShopClient {
       }
 
       const data: { products: ShopifyProduct[] } = await response.json();
-      return this.productsDto(data.products);
+      return this.productsDto(data.products, {
+        minimal: options?.minimal ?? false,
+      });
     } catch (error) {
       this.handleFetchError(
         error,
@@ -351,8 +384,8 @@ export class ShopClient {
    */
   private async fetchPaginatedProductsFromCollection(
     collectionHandle: string,
-    options: { page?: number; limit?: number } = {}
-  ) {
+    options: { page?: number; limit?: number; minimal?: boolean } = {}
+  ): Promise<Product[] | MinimalProduct[] | null> {
     try {
       const { page = 1, limit = 250 } = options;
       // Resolve canonical collection handle via HTML redirect if handle has changed
@@ -391,7 +424,9 @@ export class ShopClient {
       }
 
       const data: { products: ShopifyProduct[] } = await response.json();
-      return this.productsDto(data.products);
+      return this.productsDto(data.products, {
+        minimal: options?.minimal ?? false,
+      }) as Product[] | MinimalProduct[] | null;
     } catch (error) {
       this.handleFetchError(
         error,
@@ -575,9 +610,9 @@ export class ShopClient {
               this.validateProductExists(handle),
             validateCollectionExists: (handle: string) =>
               this.validateCollectionExists(handle),
-            validateLinksInBatches: (
-              items: any[],
-              validator: (item: any) => Promise<boolean>,
+            validateLinksInBatches: <T>(
+              items: T[],
+              validator: (item: T) => Promise<boolean>,
               batchSize?: number
             ) => this.validateLinksInBatches(items, validator, batchSize),
           },
@@ -722,8 +757,8 @@ export type {
   CurrencyCode,
   LocalizedPricing,
   MetaTag,
-  Product,
   OpenRouterConfig,
+  Product,
   ProductImage,
   ProductOption,
   ProductVariant,

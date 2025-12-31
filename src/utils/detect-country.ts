@@ -123,9 +123,14 @@ export async function detectShopCountry(
   if (currencyJsonMatch) {
     try {
       const raw = currencyJsonMatch[1];
-      const obj = JSON.parse(raw || "{}") as any;
-      const activeCode =
-        typeof obj?.active === "string" ? obj.active.toUpperCase() : undefined;
+      const obj = JSON.parse(raw || "{}") as unknown;
+      const rec =
+        obj && typeof obj === "object"
+          ? (obj as Record<string, unknown>)
+          : null;
+      const active =
+        rec && typeof rec.active === "string" ? rec.active : undefined;
+      const activeCode = active ? active.toUpperCase() : undefined;
       const iso = activeCode ? CURRENCY_CODE_TO_COUNTRY[activeCode] : undefined;
       if (activeCode) {
         detectedCurrencyCode = activeCode;

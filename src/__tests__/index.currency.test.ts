@@ -1,4 +1,5 @@
 import { ShopClient } from "../index";
+import type { MinimalProduct, Product } from "../types";
 
 jest.mock("../utils/detect-country", () => ({
   detectShopCountry: jest.fn(async () => ({
@@ -316,16 +317,18 @@ describe("Currency propagation and formatting", () => {
     expect(product).not.toBeNull();
     if (!product) return;
 
-    expect(product.currency).toBe("USD");
-    expect(product.localizedPricing).toBeDefined();
-    if (!product.localizedPricing) return;
-    expect(product.localizedPricing.currency).toBe("USD");
+    expect("handle" in product).toBe(true);
+    const p = product as Product;
+    expect(p.currency).toBe("USD");
+    expect(p.localizedPricing).toBeDefined();
+    if (!p.localizedPricing) return;
+    expect(p.localizedPricing.currency).toBe("USD");
 
     const expectedFormatted = new Intl.NumberFormat(undefined, {
       style: "currency",
       currency: "USD",
     }).format(12345 / 100);
-    expect(product.localizedPricing.priceFormatted).toBe(expectedFormatted);
+    expect(p.localizedPricing.priceFormatted).toBe(expectedFormatted);
   });
 
   test("collections.products.paginated uses store currency and formats localized pricing", async () => {
@@ -341,7 +344,9 @@ describe("Currency propagation and formatting", () => {
     if (!products) return;
 
     expect(products.length).toBe(2);
-    for (const p of products) {
+    expect("handle" in products[0]).toBe(true);
+    const ps = products as Product[];
+    for (const p of ps) {
       expect(p.currency).toBe("USD");
       expect(p.localizedPricing).toBeDefined();
       if (!p.localizedPricing) continue;
@@ -352,9 +357,9 @@ describe("Currency propagation and formatting", () => {
       style: "currency",
       currency: "USD",
     }).format(10.0);
-    expect(products[0].localizedPricing).toBeDefined();
-    if (products[0].localizedPricing) {
-      expect(products[0].localizedPricing.priceMinFormatted).toBe(expectedMin);
+    expect(ps[0].localizedPricing).toBeDefined();
+    if (ps[0].localizedPricing) {
+      expect(ps[0].localizedPricing.priceMinFormatted).toBe(expectedMin);
     }
   });
 
@@ -366,16 +371,18 @@ describe("Currency propagation and formatting", () => {
     expect(product).not.toBeNull();
     if (!product) return;
 
-    expect(product.currency).toBe("EUR");
-    expect(product.localizedPricing).toBeDefined();
-    if (!product.localizedPricing) return;
-    expect(product.localizedPricing.currency).toBe("EUR");
+    expect("handle" in product).toBe(true);
+    const p = product as Product;
+    expect(p.currency).toBe("EUR");
+    expect(p.localizedPricing).toBeDefined();
+    if (!p.localizedPricing) return;
+    expect(p.localizedPricing.currency).toBe("EUR");
 
     const expectedFormatted = new Intl.NumberFormat(undefined, {
       style: "currency",
       currency: "EUR",
     }).format(12345 / 100);
-    expect(product.localizedPricing.priceFormatted).toBe(expectedFormatted);
+    expect(p.localizedPricing.priceFormatted).toBe(expectedFormatted);
   });
 
   test("collections.products.paginated respects currency override", async () => {
@@ -392,7 +399,9 @@ describe("Currency propagation and formatting", () => {
     if (!products) return;
 
     expect(products.length).toBe(2);
-    for (const p of products) {
+    expect("handle" in products[0]).toBe(true);
+    const ps = products as Product[];
+    for (const p of ps) {
       expect(p.currency).toBe("JPY");
       expect(p.localizedPricing).toBeDefined();
       if (!p.localizedPricing) continue;
@@ -403,9 +412,9 @@ describe("Currency propagation and formatting", () => {
       style: "currency",
       currency: "JPY",
     }).format(10.0);
-    expect(products[0].localizedPricing).toBeDefined();
-    if (products[0].localizedPricing) {
-      expect(products[0].localizedPricing.priceMinFormatted).toBe(expectedMin);
+    expect(ps[0].localizedPricing).toBeDefined();
+    if (ps[0].localizedPricing) {
+      expect(ps[0].localizedPricing.priceMinFormatted).toBe(expectedMin);
     }
   });
 
@@ -417,11 +426,84 @@ describe("Currency propagation and formatting", () => {
     expect(products).toBeDefined();
     if (!products) return;
     expect(products.length).toBe(2);
-    for (const p of products) {
+    expect("handle" in products[0]).toBe(true);
+    const ps = products as Product[];
+    for (const p of ps) {
       expect(p.currency).toBe("GBP");
       expect(p.localizedPricing).toBeDefined();
       if (!p.localizedPricing) continue;
       expect(p.localizedPricing.currency).toBe("GBP");
     }
+  });
+
+  test("products.find respects currency override for minimal products", async () => {
+    const shop = new ShopClient(baseUrl);
+    await shop.getInfo();
+
+    const product = await shop.products.minimal.find("old-handle", {
+      currency: "EUR",
+    });
+    expect(product).not.toBeNull();
+    if (!product) return;
+
+    expect("handle" in product).toBe(false);
+    const p = product as MinimalProduct;
+    const expectedFormatted = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "EUR",
+    }).format(12345 / 100);
+    expect(p.localizedPricing.priceFormatted).toBe(expectedFormatted);
+  });
+
+  test("products.paginated respects currency override for minimal products", async () => {
+    const shop = new ShopClient(baseUrl);
+    await shop.getInfo();
+
+    const products = await shop.products.minimal.paginated({
+      page: 1,
+      limit: 2,
+      currency: "GBP",
+    });
+    expect(products).toBeDefined();
+    if (!products) return;
+
+    const ps = products as MinimalProduct[];
+    expect(ps.length).toBe(2);
+    for (const p of ps) {
+      expect("handle" in (p as unknown as Record<string, unknown>)).toBe(false);
+      expect(p.localizedPricing).toBeDefined();
+    }
+
+    const expectedFirst = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "GBP",
+    }).format(15.0);
+    expect(ps[0].localizedPricing.priceFormatted).toBe(expectedFirst);
+  });
+
+  test("collections.products.paginated respects currency override for minimal products", async () => {
+    const shop = new ShopClient(baseUrl);
+    await shop.getInfo();
+
+    const products = await shop.collections.products.minimal.paginated("old-collection", {
+      page: 1,
+      limit: 2,
+      currency: "JPY",
+    });
+    expect(products).toBeDefined();
+    if (!products) return;
+
+    const ps = products as MinimalProduct[];
+    expect(ps.length).toBe(2);
+    for (const p of ps) {
+      expect("handle" in (p as unknown as Record<string, unknown>)).toBe(false);
+      expect(p.localizedPricing).toBeDefined();
+    }
+
+    const expectedFirst = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "JPY",
+    }).format(10.0);
+    expect(ps[0].localizedPricing.priceFormatted).toBe(expectedFirst);
   });
 });

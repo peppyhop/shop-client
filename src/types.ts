@@ -1,5 +1,5 @@
 /**
- * @fileoverview Type definitions for the shop-client package.
+ * Type definitions for the shop-client package.
  *
  * This file contains all TypeScript type definitions used throughout the shop-client library,
  * including Shopify API response types, normalized product/collection types, and utility types.
@@ -8,7 +8,7 @@
  */
 
 // Simplified version of RequireAtLeastOne utility type
-type RequireAtLeastOne<T> = {
+export type RequireAtLeastOne<T> = {
   [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>>;
 }[keyof T];
 
@@ -30,7 +30,7 @@ export type SystemUserPrompt = {
 /**
  * Supported audience demographics for product categorization.
  */
-type Audience =
+export type Audience =
   | "adult_male"
   | "adult_female"
   | "kid_male"
@@ -41,7 +41,7 @@ type Audience =
 /**
  * Product category structure for organizing store inventory.
  */
-type Category = {
+export type Category = {
   clothing?: string[];
   jewellery?: string[];
   accessories?: string[];
@@ -50,7 +50,7 @@ type Category = {
 /**
  * Special category for non-demographic specific products.
  */
-type NoneCategory = {
+export type NoneCategory = {
   home_decor: string[];
   accessories: string[];
 };
@@ -184,6 +184,7 @@ export type ShopifyProductVariant = ShopifyBaseVariant & {
   } | null;
   available: boolean;
   price: string | number;
+  grams?: number | undefined;
   weightInGrams?: number | undefined;
   compare_at_price?: string | number | undefined;
 };
@@ -431,6 +432,29 @@ export type Product = {
   sellingPlanGroups?: unknown;
   variantOptionsMap: Record<string, string>; // Keys formatted as name#value parts joined by '##' (alphabetically sorted), e.g., "color#blue##size#xl"
   enriched_content?: string;
+};
+
+/**
+ * Minimal product structure with reduced data.
+ */
+export type MinimalProduct = {
+  title: string;
+  bodyHtml: string | null;
+  price: number;
+  compareAtPrice: number;
+  discount: number;
+  images: { src: string }[];
+  featuredImage: string | null;
+  available: boolean;
+  localizedPricing: Pick<
+    LocalizedPricing,
+    "priceFormatted" | "compareAtPriceFormatted"
+  >;
+  options: { key: string; name: string; values: string[] }[];
+  variantOptionsMap: Record<string, string>;
+  url: string;
+  slug: string;
+  platformId: string;
 };
 
 /**

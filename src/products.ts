@@ -3,6 +3,7 @@ import { filter, isNonNullish } from "remeda";
 import type { ShopInfo } from "./store";
 import type {
   CurrencyCode,
+  MinimalProduct,
   OpenRouterConfig,
   Product,
   ProductClassification,
@@ -20,11 +21,13 @@ import { rateLimitedFetch } from "./utils/rate-limit";
 export interface ProductOperations {
   /**
    * Fetches all products from the store across all pages.
+   * Use `shop.products.minimal.all()` for MinimalProduct returns.
    */
   all(options?: { currency?: CurrencyCode }): Promise<Product[] | null>;
 
   /**
    * Fetches products with pagination support.
+   * Use `shop.products.minimal.paginated()` for MinimalProduct returns.
    */
   paginated(options?: {
     page?: number;
@@ -34,6 +37,7 @@ export interface ProductOperations {
 
   /**
    * Finds a specific product by its handle.
+   * Use `shop.products.minimal.find()` for MinimalProduct returns.
    */
   find(
     productHandle: string,
@@ -99,6 +103,15 @@ export interface ProductOperations {
    * Fetches products that are showcased/featured on the store's homepage.
    */
   showcased(): Promise<Product[]>;
+  /**
+   * Showcase namespace for convenience methods related to featured items.
+   */
+  showcase: {
+    /**
+     * Returns showcased products in MinimalProduct form.
+     */
+    minimal(): Promise<MinimalProduct[]>;
+  };
 
   /**
    * Creates a filter map of variant options and their distinct values from all products.
@@ -107,6 +120,7 @@ export interface ProductOperations {
 
   /**
    * Predictive product search using Shopify Ajax API.
+   * Use `shop.products.minimal.predictiveSearch()` for MinimalProduct returns.
    */
   predictiveSearch(
     query: string,
@@ -120,6 +134,7 @@ export interface ProductOperations {
 
   /**
    * Product recommendations for a given product ID using Shopify Ajax API.
+   * Use `shop.products.minimal.recommendations()` for MinimalProduct returns.
    */
   recommendations(
     productId: number,
@@ -130,6 +145,43 @@ export interface ProductOperations {
       currency?: CurrencyCode;
     }
   ): Promise<Product[] | null>;
+
+  /**
+   * Minimal namespace for convenience methods that always return MinimalProduct types.
+   */
+  minimal: {
+    all(options?: {
+      currency?: CurrencyCode;
+    }): Promise<MinimalProduct[] | null>;
+    paginated(options?: {
+      page?: number;
+      limit?: number;
+      currency?: CurrencyCode;
+    }): Promise<MinimalProduct[] | null>;
+    find(
+      productHandle: string,
+      options?: { currency?: CurrencyCode }
+    ): Promise<MinimalProduct | null>;
+    showcased(): Promise<MinimalProduct[]>;
+    predictiveSearch(
+      query: string,
+      options?: {
+        limit?: number;
+        locale?: string;
+        currency?: CurrencyCode;
+        unavailableProducts?: "show" | "hide" | "last";
+      }
+    ): Promise<MinimalProduct[]>;
+    recommendations(
+      productId: number,
+      options?: {
+        limit?: number;
+        intent?: "related" | "complementary";
+        locale?: string;
+        currency?: CurrencyCode;
+      }
+    ): Promise<MinimalProduct[] | null>;
+  };
 }
 
 /**
@@ -138,25 +190,55 @@ export interface ProductOperations {
 export function createProductOperations(
   baseUrl: string,
   storeDomain: string,
-  fetchProducts: (page: number, limit: number) => Promise<Product[] | null>,
-  productsDto: (products: ShopifyProduct[]) => Product[] | null,
-  productDto: (product: ShopifySingleProduct) => Product,
+  fetchProducts: (
+    page: number,
+    limit: number,
+    options?: { minimal?: boolean }
+  ) => Promise<Product[] | MinimalProduct[] | null>,
+  productsDto: (
+    products: ShopifyProduct[],
+    options?: { minimal?: boolean }
+  ) => Product[] | MinimalProduct[] | null,
+  productDto: (
+    product: ShopifySingleProduct,
+    options?: { minimal?: boolean }
+  ) => Product | MinimalProduct,
   getStoreInfo: () => Promise<ShopInfo>,
-  findProduct: (handle: string) => Promise<Product | null>,
+  _findProduct: (
+    handle: string,
+    options?: { minimal?: boolean }
+  ) => Promise<Product | MinimalProduct | null>,
   ai?: { openRouter?: OpenRouterConfig }
 ): ProductOperations {
   // Use shared formatter from utils
   const cacheExpiryMs = 5 * 60 * 1000; // 5 minutes
-  const findCache = new Map<string, { ts: number; value: Product | null }>();
-  const getCached = (key: string): Product | null | undefined => {
-    const entry = findCache.get(key);
+  const findCacheFull = new Map<
+    string,
+    { ts: number; value: Product | null }
+  >();
+  const findCacheMinimal = new Map<
+    string,
+    { ts: number; value: MinimalProduct | null }
+  >();
+  const getCachedFull = (key: string): Product | null | undefined => {
+    const entry = findCacheFull.get(key);
     if (!entry) return undefined;
     if (Date.now() - entry.ts < cacheExpiryMs) return entry.value;
-    findCache.delete(key);
+    findCacheFull.delete(key);
     return undefined;
   };
-  const setCached = (key: string, value: Product | null) => {
-    findCache.set(key, { ts: Date.now(), value });
+  const setCachedFull = (key: string, value: Product | null) => {
+    findCacheFull.set(key, { ts: Date.now(), value });
+  };
+  const getCachedMinimal = (key: string): MinimalProduct | null | undefined => {
+    const entry = findCacheMinimal.get(key);
+    if (!entry) return undefined;
+    if (Date.now() - entry.ts < cacheExpiryMs) return entry.value;
+    findCacheMinimal.delete(key);
+    return undefined;
+  };
+  const setCachedMinimal = (key: string, value: MinimalProduct | null) => {
+    findCacheMinimal.set(key, { ts: Date.now(), value });
   };
 
   function applyCurrencyOverride(
@@ -180,12 +262,435 @@ export function createProductOperations(
     };
   }
 
+  function applyCurrencyOverrideMinimal(
+    product: MinimalProduct,
+    currency: CurrencyCode
+  ): MinimalProduct {
+    const compareAtPrice = product.compareAtPrice ?? 0;
+    return {
+      ...product,
+      localizedPricing: {
+        priceFormatted: formatPrice(product.price, currency),
+        compareAtPriceFormatted: formatPrice(compareAtPrice, currency),
+      },
+    };
+  }
+
   function maybeOverrideProductsCurrency(
     products: Product[] | null,
     currency?: CurrencyCode
   ): Product[] | null {
-    if (!products || !currency) return products;
+    if (!products || !currency || products.length === 0) return products;
     return products.map((p) => applyCurrencyOverride(p, currency));
+  }
+
+  function maybeOverrideMinimalProductsCurrency(
+    products: MinimalProduct[] | null,
+    currency?: CurrencyCode
+  ): MinimalProduct[] | null {
+    if (!products || !currency || products.length === 0) return products;
+    return products.map((p) => applyCurrencyOverrideMinimal(p, currency));
+  }
+
+  function allInternal(options: {
+    currency?: CurrencyCode;
+    minimal: true;
+  }): Promise<MinimalProduct[] | null>;
+  function allInternal(options: {
+    currency?: CurrencyCode;
+    minimal: false;
+  }): Promise<Product[] | null>;
+  async function allInternal(options: {
+    currency?: CurrencyCode;
+    minimal: boolean;
+  }): Promise<Product[] | MinimalProduct[] | null> {
+    const limit = 250;
+    const allProducts: (Product | MinimalProduct)[] = [];
+
+    async function fetchAll() {
+      let currentPage = 1;
+
+      while (true) {
+        const products = await fetchProducts(currentPage, limit, {
+          minimal: options.minimal,
+        });
+
+        if (!products || products.length === 0 || products.length < limit) {
+          if (products && products.length > 0) {
+            allProducts.push(...products);
+          }
+          break;
+        }
+
+        allProducts.push(...products);
+        currentPage++;
+      }
+      return allProducts as Product[] | MinimalProduct[];
+    }
+
+    try {
+      const products = await fetchAll();
+      return options.minimal
+        ? maybeOverrideMinimalProductsCurrency(
+            products as MinimalProduct[],
+            options.currency
+          )
+        : maybeOverrideProductsCurrency(
+            products as Product[],
+            options.currency
+          );
+    } catch (error) {
+      console.error("Failed to fetch all products:", storeDomain, error);
+      throw error;
+    }
+  }
+
+  function paginatedInternal(options: {
+    page?: number;
+    limit?: number;
+    currency?: CurrencyCode;
+    minimal: true;
+  }): Promise<MinimalProduct[] | null>;
+  function paginatedInternal(options: {
+    page?: number;
+    limit?: number;
+    currency?: CurrencyCode;
+    minimal: false;
+  }): Promise<Product[] | null>;
+  async function paginatedInternal(options: {
+    page?: number;
+    limit?: number;
+    currency?: CurrencyCode;
+    minimal: boolean;
+  }): Promise<Product[] | MinimalProduct[] | null> {
+    const page = options.page ?? 1;
+    const limit = Math.min(options.limit ?? 250, 250);
+    const url = `${baseUrl}products.json?limit=${limit}&page=${page}`;
+
+    try {
+      const response = await rateLimitedFetch(url, {
+        rateLimitClass: "products:paginated",
+      });
+      if (!response.ok) {
+        console.error(
+          `HTTP error! status: ${response.status} for ${storeDomain} page ${page}`
+        );
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = (await response.json()) as {
+        products: ShopifyProduct[];
+      };
+      if (data.products.length === 0) {
+        return [];
+      }
+      const normalized = productsDto(data.products, {
+        minimal: options.minimal,
+      });
+      return options.minimal
+        ? maybeOverrideMinimalProductsCurrency(
+            (normalized as MinimalProduct[] | null) || null,
+            options.currency
+          )
+        : maybeOverrideProductsCurrency(
+            (normalized as Product[] | null) || null,
+            options.currency
+          );
+    } catch (error) {
+      console.error(
+        `Error fetching products for ${storeDomain} page ${page} with limit ${limit}:`,
+        error
+      );
+      return null;
+    }
+  }
+
+  function findInternal(
+    productHandle: string,
+    options: { currency?: CurrencyCode; minimal: true }
+  ): Promise<MinimalProduct | null>;
+  function findInternal(
+    productHandle: string,
+    options: { currency?: CurrencyCode; minimal: false }
+  ): Promise<Product | null>;
+  function findInternal(
+    productHandle: string,
+    options: { currency?: CurrencyCode; minimal: boolean }
+  ): Promise<Product | MinimalProduct | null>;
+  async function findInternal(
+    productHandle: string,
+    options: { currency?: CurrencyCode; minimal: boolean }
+  ): Promise<Product | MinimalProduct | null> {
+    if (!productHandle || typeof productHandle !== "string") {
+      throw new Error("Product handle is required and must be a string");
+    }
+
+    try {
+      let qs: string | null = null;
+      if (productHandle.includes("?")) {
+        const parts = productHandle.split("?");
+        const handlePart = parts[0] ?? productHandle;
+        const qsPart = parts[1] ?? null;
+        productHandle = handlePart;
+        qs = qsPart;
+      }
+
+      const sanitizedHandle = productHandle
+        .trim()
+        .replace(/[^a-zA-Z0-9\-_]/g, "");
+      if (!sanitizedHandle) {
+        throw new Error("Invalid product handle format");
+      }
+
+      if (sanitizedHandle.length > 255) {
+        throw new Error("Product handle is too long");
+      }
+
+      const cached = options.minimal
+        ? getCachedMinimal(sanitizedHandle)
+        : getCachedFull(sanitizedHandle);
+      if (typeof cached !== "undefined") {
+        if (!cached || !options.currency) return cached;
+        return options.minimal
+          ? applyCurrencyOverrideMinimal(
+              cached as MinimalProduct,
+              options.currency
+            )
+          : applyCurrencyOverride(cached as Product, options.currency);
+      }
+
+      let finalHandle = sanitizedHandle;
+      try {
+        const htmlResp = await rateLimitedFetch(
+          `${baseUrl}products/${encodeURIComponent(sanitizedHandle)}`,
+          { rateLimitClass: "products:resolve" }
+        );
+        if (htmlResp.ok) {
+          const finalUrl = htmlResp.url;
+          if (finalUrl) {
+            const pathname = new URL(finalUrl).pathname.replace(/\/$/, "");
+            const parts = pathname.split("/").filter(Boolean);
+            const idx = parts.indexOf("products");
+            const maybeHandle = idx >= 0 ? parts[idx + 1] : undefined;
+            if (typeof maybeHandle === "string" && maybeHandle.length) {
+              finalHandle = maybeHandle;
+            }
+          }
+        }
+      } catch {
+        // Ignore redirect resolution errors and proceed with original handle
+      }
+
+      const url = `${baseUrl}products/${encodeURIComponent(finalHandle)}.js${qs ? `?${qs}` : ""}`;
+      const response = await rateLimitedFetch(url, {
+        rateLimitClass: "products:single",
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return null;
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const product = (await response.json()) as ShopifySingleProduct;
+      const productData = productDto(product, { minimal: options.minimal });
+
+      if (options.minimal) {
+        const minimalData = productData as MinimalProduct;
+        setCachedMinimal(sanitizedHandle, minimalData);
+        if (finalHandle !== sanitizedHandle)
+          setCachedMinimal(finalHandle, minimalData);
+        return options.currency
+          ? applyCurrencyOverrideMinimal(minimalData, options.currency)
+          : minimalData;
+      }
+
+      const fullData = productData as Product;
+      setCachedFull(sanitizedHandle, fullData);
+      if (finalHandle !== sanitizedHandle) setCachedFull(finalHandle, fullData);
+      return options.currency
+        ? applyCurrencyOverride(fullData, options.currency)
+        : fullData;
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error(
+          `Error fetching product ${productHandle}:`,
+          baseUrl,
+          error.message
+        );
+      }
+      throw error;
+    }
+  }
+
+  function predictiveSearchInternal(
+    query: string,
+    options: {
+      limit?: number;
+      locale?: string;
+      currency?: CurrencyCode;
+      unavailableProducts?: "show" | "hide" | "last";
+      minimal: true;
+    }
+  ): Promise<MinimalProduct[]>;
+  function predictiveSearchInternal(
+    query: string,
+    options: {
+      limit?: number;
+      locale?: string;
+      currency?: CurrencyCode;
+      unavailableProducts?: "show" | "hide" | "last";
+      minimal: false;
+    }
+  ): Promise<Product[]>;
+  async function predictiveSearchInternal(
+    query: string,
+    options: {
+      limit?: number;
+      locale?: string;
+      currency?: CurrencyCode;
+      unavailableProducts?: "show" | "hide" | "last";
+      minimal: boolean;
+    }
+  ): Promise<Product[] | MinimalProduct[]> {
+    if (!query || typeof query !== "string") {
+      throw new Error("Query is required and must be a string");
+    }
+    const limit = Math.max(1, Math.min(options.limit ?? 10, 10));
+    const unavailable =
+      options.unavailableProducts === "show" ||
+      options.unavailableProducts === "hide"
+        ? options.unavailableProducts
+        : "hide";
+    const localeValue = (options.locale && options.locale.trim()) || "en";
+    const localePrefix = `${localeValue.replace(/^\/|\/$/g, "")}/`;
+    const url =
+      `${baseUrl}${localePrefix}search/suggest.json` +
+      `?q=${encodeURIComponent(query)}` +
+      `&resources[type]=product` +
+      `&resources[limit]=${limit}` +
+      `&resources[options][unavailable_products]=${unavailable}`;
+
+    const response = await rateLimitedFetch(url, {
+      rateLimitClass: "search:predictive",
+      timeoutMs: 7000,
+      retry: { maxRetries: 2, baseDelayMs: 300 },
+    });
+    let resp = response;
+    if (!resp.ok && (resp.status === 404 || resp.status === 417)) {
+      const fallbackUrl =
+        `${baseUrl}search/suggest.json` +
+        `?q=${encodeURIComponent(query)}` +
+        `&resources[type]=product` +
+        `&resources[limit]=${limit}` +
+        `&resources[options][unavailable_products]=${unavailable}`;
+      resp = await rateLimitedFetch(fallbackUrl, {
+        rateLimitClass: "search:predictive",
+        timeoutMs: 7000,
+        retry: { maxRetries: 2, baseDelayMs: 300 },
+      });
+    }
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
+    const data = (await resp.json()) as ShopifyPredictiveProductSearch;
+    const raw = data?.resources?.results?.products ?? [];
+    const handles = raw
+      .filter((p) => p.available !== false)
+      .map((p) => p.handle)
+      .filter((h) => typeof h === "string" && h.length > 0)
+      .slice(0, limit);
+    const fetched = await Promise.all(
+      handles.map((h) => findInternal(h, { minimal: options.minimal }))
+    );
+    const results = filter(fetched, isNonNullish);
+    const finalProducts = options.minimal
+      ? (maybeOverrideMinimalProductsCurrency(
+          results as MinimalProduct[],
+          options.currency
+        ) ?? [])
+      : (maybeOverrideProductsCurrency(
+          results as Product[],
+          options.currency
+        ) ?? []);
+    return finalProducts as Product[] | MinimalProduct[];
+  }
+
+  function recommendationsInternal(
+    productId: number,
+    options: {
+      limit?: number;
+      intent?: "related" | "complementary";
+      locale?: string;
+      currency?: CurrencyCode;
+      minimal: true;
+    }
+  ): Promise<MinimalProduct[] | null>;
+  function recommendationsInternal(
+    productId: number,
+    options: {
+      limit?: number;
+      intent?: "related" | "complementary";
+      locale?: string;
+      currency?: CurrencyCode;
+      minimal: false;
+    }
+  ): Promise<Product[] | null>;
+  async function recommendationsInternal(
+    productId: number,
+    options: {
+      limit?: number;
+      intent?: "related" | "complementary";
+      locale?: string;
+      currency?: CurrencyCode;
+      minimal: boolean;
+    }
+  ): Promise<Product[] | MinimalProduct[] | null> {
+    if (!Number.isFinite(productId) || productId <= 0) {
+      throw new Error("Valid productId is required");
+    }
+    const limit = Math.max(1, Math.min(options.limit ?? 10, 10));
+    const intent = options.intent ?? "related";
+    const localeValue = (options.locale && options.locale.trim()) || "en";
+    const localePrefix = `${localeValue.replace(/^\/|\/$/g, "")}/`;
+    const url =
+      `${baseUrl}${localePrefix}recommendations/products.json` +
+      `?product_id=${encodeURIComponent(String(productId))}` +
+      `&limit=${limit}` +
+      `&intent=${intent}`;
+
+    const resp = await rateLimitedFetch(url, {
+      rateLimitClass: "products:recommendations",
+      timeoutMs: 7000,
+      retry: { maxRetries: 2, baseDelayMs: 300 },
+    });
+    if (!resp.ok) {
+      if (resp.status === 404) {
+        return [];
+      }
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
+    const data: unknown = await resp.json();
+    const isRecord = (v: unknown): v is Record<string, unknown> =>
+      typeof v === "object" && v !== null;
+    const productsArray: ShopifyProduct[] = Array.isArray(data)
+      ? (data as ShopifyProduct[])
+      : isRecord(data) && Array.isArray(data.products)
+        ? (data.products as ShopifyProduct[])
+        : [];
+    const normalized =
+      productsDto(productsArray, { minimal: options.minimal }) || [];
+    const finalProducts = options.minimal
+      ? maybeOverrideMinimalProductsCurrency(
+          normalized as MinimalProduct[],
+          options.currency
+        )
+      : maybeOverrideProductsCurrency(
+          normalized as Product[],
+          options.currency
+        );
+    return finalProducts ?? [];
   }
 
   const operations: ProductOperations = {
@@ -209,37 +714,8 @@ export function createProductOperations(
      */
     all: async (options?: {
       currency?: CurrencyCode;
-    }): Promise<Product[] | null> => {
-      const limit = 250;
-      const allProducts: Product[] = [];
-
-      async function fetchAll() {
-        let currentPage = 1;
-
-        while (true) {
-          const products = await fetchProducts(currentPage, limit);
-
-          if (!products || products.length === 0 || products.length < limit) {
-            if (products && products.length > 0) {
-              allProducts.push(...products);
-            }
-            break;
-          }
-
-          allProducts.push(...products);
-          currentPage++;
-        }
-        return allProducts;
-      }
-
-      try {
-        const products = await fetchAll();
-        return maybeOverrideProductsCurrency(products, options?.currency);
-      } catch (error) {
-        console.error("Failed to fetch all products:", storeDomain, error);
-        throw error;
-      }
-    },
+    }): Promise<Product[] | null> =>
+      allInternal({ currency: options?.currency, minimal: false }),
 
     /**
      * Fetches products with pagination support.
@@ -267,38 +743,13 @@ export function createProductOperations(
       page?: number;
       limit?: number;
       currency?: CurrencyCode;
-    }): Promise<Product[] | null> => {
-      const page = options?.page ?? 1;
-      const limit = Math.min(options?.limit ?? 250, 250);
-      const url = `${baseUrl}products.json?limit=${limit}&page=${page}`;
-
-      try {
-        const response = await rateLimitedFetch(url, {
-          rateLimitClass: "products:paginated",
-        });
-        if (!response.ok) {
-          console.error(
-            `HTTP error! status: ${response.status} for ${storeDomain} page ${page}`
-          );
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = (await response.json()) as {
-          products: ShopifyProduct[];
-        };
-        if (data.products.length === 0) {
-          return [];
-        }
-        const normalized = productsDto(data.products);
-        return maybeOverrideProductsCurrency(normalized, options?.currency);
-      } catch (error) {
-        console.error(
-          `Error fetching products for ${storeDomain} page ${page} with limit ${limit}:`,
-          error
-        );
-        return null;
-      }
-    },
+    }): Promise<Product[] | null> =>
+      paginatedInternal({
+        page: options?.page,
+        limit: options?.limit,
+        currency: options?.currency,
+        minimal: false,
+      }),
 
     /**
      * Finds a specific product by its handle.
@@ -328,100 +779,11 @@ export function createProductOperations(
     find: async (
       productHandle: string,
       options?: { currency?: CurrencyCode }
-    ): Promise<Product | null> => {
-      // Validate product handle
-      if (!productHandle || typeof productHandle !== "string") {
-        throw new Error("Product handle is required and must be a string");
-      }
-
-      try {
-        let qs: string | null = null;
-        if (productHandle.includes("?")) {
-          const parts = productHandle.split("?");
-          const handlePart = parts[0] ?? productHandle;
-          const qsPart = parts[1] ?? null;
-          productHandle = handlePart;
-          qs = qsPart;
-        }
-
-        // Sanitize handle - remove potentially dangerous characters
-        const sanitizedHandle = productHandle
-          .trim()
-          .replace(/[^a-zA-Z0-9\-_]/g, "");
-        if (!sanitizedHandle) {
-          throw new Error("Invalid product handle format");
-        }
-
-        // Check handle length (reasonable limits)
-        if (sanitizedHandle.length > 255) {
-          throw new Error("Product handle is too long");
-        }
-
-        // Return cached value if present
-        const cached = getCached(sanitizedHandle);
-        if (typeof cached !== "undefined") {
-          return options?.currency
-            ? cached
-              ? applyCurrencyOverride(cached, options.currency!)
-              : null
-            : cached;
-        }
-
-        // Resolve canonical handle via HTML redirect if handle has changed
-        let finalHandle = sanitizedHandle;
-        try {
-          const htmlResp = await rateLimitedFetch(
-            `${baseUrl}products/${encodeURIComponent(sanitizedHandle)}`,
-            { rateLimitClass: "products:resolve" }
-          );
-          if (htmlResp.ok) {
-            const finalUrl = htmlResp.url;
-            if (finalUrl) {
-              const pathname = new URL(finalUrl).pathname.replace(/\/$/, "");
-              const parts = pathname.split("/").filter(Boolean);
-              const idx = parts.indexOf("products");
-              const maybeHandle = idx >= 0 ? parts[idx + 1] : undefined;
-              if (typeof maybeHandle === "string" && maybeHandle.length) {
-                finalHandle = maybeHandle;
-              }
-            }
-          }
-        } catch {
-          // Ignore redirect resolution errors and proceed with original handle
-        }
-
-        const url = `${baseUrl}products/${encodeURIComponent(finalHandle)}.js${qs ? `?${qs}` : ""}`;
-        const response = await rateLimitedFetch(url, {
-          rateLimitClass: "products:single",
-        });
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            return null;
-          }
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const product = (await response.json()) as ShopifySingleProduct;
-        const productData = productDto(product);
-        // Cache under both original sanitized handle and final handle
-        setCached(sanitizedHandle, productData);
-        if (finalHandle !== sanitizedHandle)
-          setCached(finalHandle, productData);
-        return options?.currency
-          ? applyCurrencyOverride(productData, options.currency)
-          : productData;
-      } catch (error) {
-        if (error instanceof Error) {
-          console.error(
-            `Error fetching product ${productHandle}:`,
-            baseUrl,
-            error.message
-          );
-        }
-        throw error;
-      }
-    },
+    ): Promise<Product | null> =>
+      findInternal(productHandle, {
+        minimal: false,
+        currency: options?.currency,
+      }),
 
     /**
      * Enrich a product by generating merged markdown from body_html and product page.
@@ -444,9 +806,7 @@ export function createProductOperations(
 
       // Reuse find() for validation and normalized product
       const baseProduct = await operations.find(productHandle);
-      if (!baseProduct) {
-        return null;
-      }
+      if (!baseProduct) return null;
 
       // Use the normalized handle from the found product
       const handle = baseProduct.handle;
@@ -480,10 +840,9 @@ export function createProductOperations(
         throw new Error("Product handle is required and must be a string");
       }
 
+      // Reuse find() for validation and normalized product
       const baseProduct = await operations.find(productHandle);
-      if (!baseProduct) {
-        throw new Error("Product not found");
-      }
+      if (!baseProduct) throw new Error("Product not found");
 
       const handle = baseProduct.handle;
       const { buildEnrichPromptForProduct } = await import("./ai/enrich");
@@ -553,9 +912,7 @@ export function createProductOperations(
       }
 
       const baseProduct = await operations.find(productHandle);
-      if (!baseProduct) {
-        throw new Error("Product not found");
-      }
+      if (!baseProduct) throw new Error("Product not found");
 
       const handle = baseProduct.handle;
       const { buildClassifyPromptForProduct } = await import("./ai/enrich");
@@ -585,13 +942,9 @@ export function createProductOperations(
         tags: baseProduct.tags,
       };
 
-      const {
-        extractMainSection,
-        fetchAjaxProduct,
-        fetchProductPage,
-        generateSEOContent: generateSEOContentLLM,
-        mergeWithLLM,
-      } = await import("./ai/enrich");
+      const { generateSEOContent: generateSEOContentLLM } = await import(
+        "./ai/enrich"
+      );
       const seo = await generateSEOContentLLM(payload, {
         apiKey: options?.apiKey,
         openRouter: ai?.openRouter,
@@ -658,7 +1011,7 @@ export function createProductOperations(
      * });
      * ```
      */
-    showcased: async () => {
+    showcased: async (): Promise<Product[]> => {
       const storeInfo = await getStoreInfo();
       const normalizedHandles = storeInfo.showcase.products
         .map((h: string) => h.split("?")[0]?.replace(/^\/|\/$/g, ""))
@@ -671,9 +1024,11 @@ export function createProductOperations(
         uniqueHandles.push(base);
       }
       const products = await Promise.all(
-        uniqueHandles.map((productHandle: string) => findProduct(productHandle))
+        uniqueHandles.map((productHandle: string) =>
+          findInternal(productHandle, { minimal: false })
+        )
       );
-      return filter(products, isNonNullish);
+      return filter(products, isNonNullish) as Product[];
     },
 
     /**
@@ -700,7 +1055,8 @@ export function createProductOperations(
     filter: async (): Promise<Record<string, string[]> | null> => {
       try {
         // Use the existing all() method to get all products across all pages
-        const products = await operations.all();
+        // We cast to Product[] because filter logic requires full product details (options, variants)
+        const products = (await operations.all()) as Product[] | null;
         if (!products || products.length === 0) {
           return {};
         }
@@ -735,6 +1091,7 @@ export function createProductOperations(
 
             // Also process individual variant options as fallback
             product.variants.forEach((variant) => {
+              if (product.options?.length) return;
               if (variant.option1) {
                 const optionName = (
                   product.options?.[0]?.name || "Option 1"
@@ -793,61 +1150,14 @@ export function createProductOperations(
         currency?: CurrencyCode;
         unavailableProducts?: "show" | "hide" | "last";
       }
-    ): Promise<Product[]> => {
-      if (!query || typeof query !== "string") {
-        throw new Error("Query is required and must be a string");
-      }
-      const limit = Math.max(1, Math.min(options?.limit ?? 10, 10));
-      const unavailable =
-        options?.unavailableProducts === "show" ||
-        options?.unavailableProducts === "hide"
-          ? options.unavailableProducts
-          : "hide";
-      const localeValue = (options?.locale && options.locale.trim()) || "en";
-      const localePrefix = `${localeValue.replace(/^\/|\/$/g, "")}/`;
-      const url =
-        `${baseUrl}${localePrefix}search/suggest.json` +
-        `?q=${encodeURIComponent(query)}` +
-        `&resources[type]=product` +
-        `&resources[limit]=${limit}` +
-        `&resources[options][unavailable_products]=${unavailable}`;
-
-      const response = await rateLimitedFetch(url, {
-        rateLimitClass: "search:predictive",
-        timeoutMs: 7000,
-        retry: { maxRetries: 2, baseDelayMs: 300 },
-      });
-      let resp = response;
-      if (!resp.ok && (resp.status === 404 || resp.status === 417)) {
-        const fallbackUrl =
-          `${baseUrl}search/suggest.json` +
-          `?q=${encodeURIComponent(query)}` +
-          `&resources[type]=product` +
-          `&resources[limit]=${limit}` +
-          `&resources[options][unavailable_products]=${unavailable}`;
-        resp = await rateLimitedFetch(fallbackUrl, {
-          rateLimitClass: "search:predictive",
-          timeoutMs: 7000,
-          retry: { maxRetries: 2, baseDelayMs: 300 },
-        });
-      }
-      if (!resp.ok) {
-        // Common error statuses: 417 (language), 422 (invalid params), 429 (throttle), 5xx
-        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-      }
-      const data = (await resp.json()) as ShopifyPredictiveProductSearch;
-      const raw = data?.resources?.results?.products ?? [];
-      const handles = raw
-        .filter((p: any) => Boolean(p?.available ?? true))
-        .map((p: any) => String(p?.handle ?? ""))
-        .filter((h: string) => h.length > 0)
-        .slice(0, limit);
-      const fetched = await Promise.all(handles.map((h) => findProduct(h)));
-      const results = filter(fetched, isNonNullish);
-      const finalProducts =
-        maybeOverrideProductsCurrency(results, options?.currency) ?? [];
-      return finalProducts;
-    },
+    ): Promise<Product[]> =>
+      predictiveSearchInternal(query, {
+        limit: options?.limit,
+        locale: options?.locale,
+        currency: options?.currency,
+        unavailableProducts: options?.unavailableProducts,
+        minimal: false,
+      }) as Promise<Product[]>,
 
     recommendations: async (
       productId: number,
@@ -857,42 +1167,100 @@ export function createProductOperations(
         locale?: string;
         currency?: CurrencyCode;
       }
-    ): Promise<Product[] | null> => {
-      if (!Number.isFinite(productId) || productId <= 0) {
-        throw new Error("Valid productId is required");
-      }
-      const limit = Math.max(1, Math.min(options?.limit ?? 10, 10));
-      const intent =
-        options?.intent === "complementary" ? "complementary" : "related";
-      const localeValue = (options?.locale && options.locale.trim()) || "en";
-      const localePrefix = `${localeValue.replace(/^\/|\/$/g, "")}/`;
-      const url =
-        `${baseUrl}${localePrefix}recommendations/products.json` +
-        `?product_id=${encodeURIComponent(String(productId))}` +
-        `&limit=${limit}` +
-        `&intent=${intent}`;
-
-      const resp = await rateLimitedFetch(url, {
-        rateLimitClass: "products:recommendations",
-        timeoutMs: 7000,
-        retry: { maxRetries: 2, baseDelayMs: 300 },
-      });
-      if (!resp.ok) {
-        if (resp.status === 404) {
-          return [];
+    ): Promise<Product[] | null> =>
+      recommendationsInternal(productId, {
+        limit: options?.limit,
+        intent: options?.intent,
+        locale: options?.locale,
+        currency: options?.currency,
+        minimal: false,
+      }) as Promise<Product[] | null>,
+    minimal: {
+      all: async (options?: {
+        currency?: CurrencyCode;
+      }): Promise<MinimalProduct[] | null> => {
+        return allInternal({ minimal: true, currency: options?.currency });
+      },
+      paginated: async (options?: {
+        page?: number;
+        limit?: number;
+        currency?: CurrencyCode;
+      }): Promise<MinimalProduct[] | null> => {
+        return paginatedInternal({
+          page: options?.page,
+          limit: options?.limit,
+          currency: options?.currency,
+          minimal: true,
+        });
+      },
+      find: async (
+        productHandle: string,
+        options?: { currency?: CurrencyCode }
+      ): Promise<MinimalProduct | null> => {
+        return findInternal(productHandle, {
+          minimal: true,
+          currency: options?.currency,
+        });
+      },
+      showcased: async (): Promise<MinimalProduct[]> => {
+        const res = await operations.showcase.minimal();
+        return (res || []) as MinimalProduct[];
+      },
+      predictiveSearch: async (
+        query: string,
+        options?: {
+          limit?: number;
+          locale?: string;
+          currency?: CurrencyCode;
+          unavailableProducts?: "show" | "hide" | "last";
         }
-        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-      }
-      const data = await resp.json();
-      const productsArray: ShopifyProduct[] = Array.isArray(data)
-        ? (data as ShopifyProduct[])
-        : Array.isArray((data as any)?.products)
-          ? ((data as any).products as ShopifyProduct[])
-          : [];
-      const normalized = productsDto(productsArray) || [];
-      const finalProducts =
-        maybeOverrideProductsCurrency(normalized, options?.currency) ?? [];
-      return finalProducts;
+      ): Promise<MinimalProduct[]> => {
+        return predictiveSearchInternal(query, {
+          limit: options?.limit,
+          locale: options?.locale,
+          currency: options?.currency,
+          unavailableProducts: options?.unavailableProducts,
+          minimal: true,
+        }) as Promise<MinimalProduct[]>;
+      },
+      recommendations: async (
+        productId: number,
+        options?: {
+          limit?: number;
+          intent?: "related" | "complementary";
+          locale?: string;
+          currency?: CurrencyCode;
+        }
+      ): Promise<MinimalProduct[] | null> => {
+        return recommendationsInternal(productId, {
+          limit: options?.limit,
+          intent: options?.intent,
+          locale: options?.locale,
+          currency: options?.currency,
+          minimal: true,
+        }) as Promise<MinimalProduct[] | null>;
+      },
+    },
+    showcase: {
+      minimal: async (): Promise<MinimalProduct[]> => {
+        const storeInfo = await getStoreInfo();
+        const normalizedHandles = storeInfo.showcase.products
+          .map((h: string) => h.split("?")[0]?.replace(/^\/|\/$/g, ""))
+          .filter((base): base is string => Boolean(base));
+        const seen = new Set<string>();
+        const uniqueHandles: string[] = [];
+        for (const base of normalizedHandles) {
+          if (seen.has(base)) continue;
+          seen.add(base);
+          uniqueHandles.push(base);
+        }
+        const products = await Promise.all(
+          uniqueHandles.map((productHandle: string) =>
+            findInternal(productHandle, { minimal: true })
+          )
+        );
+        return filter(products, isNonNullish) as MinimalProduct[];
+      },
     },
   };
 

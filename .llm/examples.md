@@ -103,6 +103,26 @@ const fresh = await shop.getInfo();
 const freshInfo = await shop.getInfo({ force: true });
 ```
 
+### 2d. Showcased Products
+
+```typescript
+import { ShopClient } from 'shop-client';
+
+async function getShowcasedProducts() {
+  const shop = new ShopClient('anuki.in');
+
+  // Full showcased products
+  const featured = await shop.products.showcased();
+  console.log(`Full showcased products: ${(featured || []).length}`);
+
+  // Minimal showcased products
+  const minimalFeatured = await shop.products.showcase.minimal();
+  console.log(`Minimal showcased products: ${(minimalFeatured || []).length}`);
+}
+
+getShowcasedProducts();
+```
+
 ### 3. Product Search and Filtering
 
 ```typescript

@@ -1,4 +1,5 @@
 import { configureRateLimit, ShopClient } from "../src/index";
+import type { Product, ProductVariant } from "../src/types";
 
 async function advancedUsageExample() {
   // Enable and configure global rate limiting for all internal requests
@@ -68,10 +69,10 @@ async function advancedUsageExample() {
     console.log("\n🛍️ Advanced Product Operations...");
 
     // Get showcased products first
-    const showcasedProducts = await shop.products.showcased();
+    const showcasedProducts = (await shop.products.showcased()) as Product[];
     console.log(`\n🌟 Showcased Products: ${showcasedProducts.length}`);
 
-    showcasedProducts.slice(0, 3).forEach((product, index) => {
+    showcasedProducts.slice(0, 3).forEach((product: Product, index: number) => {
       console.log(`  ${index + 1}. ${product.title}`);
       console.log(`     Price: $${(product.price / 100).toFixed(2)}`);
       console.log(`     Available: ${product.available ? "Yes" : "No"}`);
@@ -83,14 +84,19 @@ async function advancedUsageExample() {
 
     // Get paginated products for analysis
     console.log("\n📄 Paginated Product Analysis...");
-    const firstPage = await shop.products.paginated({ page: 1, limit: 10 });
+    const firstPage = (await shop.products.paginated({
+      page: 1,
+      limit: 10,
+      minimal: false,
+    })) as Product[];
 
     if (firstPage && firstPage.length > 0) {
       console.log(`  First page: ${firstPage.length} products`);
 
       // Analyze pricing
-      const prices = firstPage.map((p) => p.price / 100);
-      const avgPrice = prices.reduce((a, b) => a + b, 0) / prices.length;
+      const prices = firstPage.map((p: Product) => p.price / 100);
+      const avgPrice =
+        prices.reduce((a: number, b: number) => a + b, 0) / prices.length;
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
 
@@ -101,13 +107,13 @@ async function advancedUsageExample() {
       );
 
       // Analyze availability
-      const availableCount = firstPage.filter((p) => p.available).length;
+      const availableCount = firstPage.filter((p: Product) => p.available).length;
       console.log(
         `  Availability: ${availableCount}/${firstPage.length} products available`
       );
 
       // Analyze vendors
-      const vendors = [...new Set(firstPage.map((p) => p.vendor))];
+      const vendors = [...new Set(firstPage.map((p: Product) => p.vendor))];
       console.log(`  Vendors: ${vendors.length} unique vendors`);
       vendors.slice(0, 3).forEach((vendor) => {
         const count = firstPage.filter((p) => p.vendor === vendor).length;
@@ -136,7 +142,9 @@ async function advancedUsageExample() {
       const productHandle = showcasedProducts[0].handle;
       console.log(`\n🔎 Detailed Product Analysis: ${productHandle}`);
 
-      const detailedProduct = await shop.products.find(productHandle);
+      const detailedProduct = (await shop.products.find(productHandle, {
+        minimal: false,
+      })) as Product | null;
       if (detailedProduct) {
         console.log(`  Title: ${detailedProduct.title}`);
         console.log(
@@ -156,23 +164,28 @@ async function advancedUsageExample() {
           console.log(`    Total variants: ${detailedProduct.variants.length}`);
 
           const variantPrices = detailedProduct.variants.map(
-            (v) => v.price / 100
+            (v: ProductVariant) => v.price / 100
           );
           const variantAvgPrice =
-            variantPrices.reduce((a, b) => a + b, 0) / variantPrices.length;
+            variantPrices.reduce(
+              (a: number, b: number) => a + b,
+              0
+            ) / variantPrices.length;
           console.log(
             `    Average variant price: $${variantAvgPrice.toFixed(2)}`
           );
 
           const availableVariants = detailedProduct.variants.filter(
-            (v) => v.available
+            (v: ProductVariant) => v.available
           ).length;
           console.log(
             `    Available variants: ${availableVariants}/${detailedProduct.variants.length}`
           );
 
           // Show first few variants
-          detailedProduct.variants.slice(0, 3).forEach((variant, index) => {
+          detailedProduct.variants
+            .slice(0, 3)
+            .forEach((variant: ProductVariant, index: number) => {
             console.log(`    Variant ${index + 1}: ${variant.title}`);
             console.log(`      Price: $${(variant.price / 100).toFixed(2)}`);
             console.log(`      Available: ${variant.available ? "Yes" : "No"}`);
@@ -255,14 +268,17 @@ async function advancedUsageExample() {
         `\n🔍 Collection Product Analysis: ${targetCollection.title}`
       );
 
-      const collectionProducts = await shop.collections.products.all(
-        targetCollection.handle
-      );
+      const collectionProducts = (await shop.collections.products.all(
+        targetCollection.handle,
+        { minimal: false }
+      )) as Product[] | null;
       if (collectionProducts && collectionProducts.length > 0) {
         console.log(`  Products in collection: ${collectionProducts.length}`);
 
         // Analyze collection products
-        const collectionPrices = collectionProducts.map((p) => p.price / 100);
+        const collectionPrices = collectionProducts.map(
+          (p: Product) => p.price / 100
+        );
         const collectionAvgPrice =
           collectionPrices.reduce((a, b) => a + b, 0) / collectionPrices.length;
         const collectionMinPrice = Math.min(...collectionPrices);
@@ -274,7 +290,7 @@ async function advancedUsageExample() {
         console.log(`  Average price: $${collectionAvgPrice.toFixed(2)}`);
 
         const collectionAvailable = collectionProducts.filter(
-          (p) => p.available
+          (p: Product) => p.available
         ).length;
         console.log(
           `  Available products: ${collectionAvailable}/${collectionProducts.length}`
@@ -282,7 +298,7 @@ async function advancedUsageExample() {
 
         // Show sample products
         console.log(`  Sample products:`);
-        collectionProducts.slice(0, 3).forEach((product, index) => {
+        collectionProducts.slice(0, 3).forEach((product: Product, index: number) => {
           console.log(
             `    ${index + 1}. ${product.title} - $${(product.price / 100).toFixed(2)}`
           );
@@ -290,6 +306,17 @@ async function advancedUsageExample() {
       }
     }
 
+    const minimalAllProducts = await shop.products.minimal.all();
+    console.log(`\n🧪 Minimal products: ${(minimalAllProducts || []).length}`);
+    if (allCollections.length > 0) {
+      const minimalCollectionProducts =
+        await shop.collections.products.minimal.all(allCollections[0].handle);
+      console.log(
+        `Minimal products in first collection: ${minimalCollectionProducts?.length || 0}`
+      );
+    }
+    const minimalShowcased = await shop.products.showcase.minimal();
+    console.log(`Minimal showcased products: ${(minimalShowcased || []).length}`);
     console.log("\n✅ Advanced analysis completed successfully!");
     console.log("==========================================");
   } catch (error) {
