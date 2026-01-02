@@ -132,11 +132,9 @@ async function getEnhancedProduct(handle: string) {
   const shop = new ShopClient("anuki.in");
 
   const base = await shop.products.find(handle);
-  if (!base?.updatedAt) return null;
-
   return shop.products.findEnhanced(handle, {
     apiKey: "YOUR_WORKER_API_KEY",
-    updatedAt: base.updatedAt.toISOString(),
+    updatedAt: base?.updatedAt?.toISOString(),
   });
 }
 
