@@ -663,26 +663,49 @@ export type SEOContent = {
   marketingCopy: string;
 };
 
+/**
+ * Contextual image information extracted from product content.
+ */
 export type EnhancedProductImage = {
+  /** The text surrounding the image reference. */
   textContext: string;
+  /** The image URL. */
   url: string;
+  /** The image alt text. */
   alt: string;
 };
 
+/**
+ * Structured canonical product data extracted by AI.
+ */
 export type EnhancedProductCanonical = {
+  /** The product title. */
   title: string;
+  /** A brief summary of the product. */
   summary: string;
+  /** Key highlights or features of the product. */
   highlights: string[];
+  /** Material information (array of strings or object). */
   materials: unknown;
+  /** Fit and sizing information. */
   fit_and_size: unknown;
+  /** Care instructions. */
   care: unknown;
+  /** Unique selling points. */
   what_makes_it_special: unknown;
+  /** Information that was looked for but not found. */
   missing_info: unknown[];
+  /** List of contextual images found in the description. */
   images: EnhancedProductImage[];
 };
 
+/**
+ * The full enrichment result containing both structured and markdown formats.
+ */
 export type EnhancedProductEnrichment = {
+  /** The structured canonical data. */
   canonical: EnhancedProductCanonical;
+  /** The generated markdown content. */
   markdown: string;
 };
 
