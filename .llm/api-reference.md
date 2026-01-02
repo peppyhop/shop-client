@@ -247,6 +247,50 @@ if (product) {
 }
 ```
 
+### findEnhanced(productHandle: string, options)
+
+```typescript
+async findEnhanced(
+  productHandle: string,
+  options: { apiKey: string; updatedAt: string; endpoint?: string }
+): Promise<EnhancedProductResponse | null>
+```
+
+Fetches the product and returns enrichment from the enhancement worker.
+
+**Parameters:**
+- `productHandle` (string): The product handle
+- `options.apiKey` (string): Worker API key (sent as `x-api-key`)
+- `options.updatedAt` (string): Product `updatedAt` timestamp used for cache-busting/invalidation
+- `options.endpoint` (string, optional): Override the worker endpoint URL
+
+**Returns:** `EnhancedProductResponse | null`
+
+**Example:**
+```typescript
+const base = await shop.products.find("awesome-t-shirt");
+if (!base?.updatedAt) return null;
+
+const enhanced = await shop.products.findEnhanced("awesome-t-shirt", {
+  apiKey: "YOUR_WORKER_API_KEY",
+  updatedAt: base.updatedAt.toISOString(),
+});
+
+console.log(enhanced?.cache); // "hit" | "miss"
+console.log(enhanced?.enrichment.canonical.title);
+```
+
+Minimal variant:
+```typescript
+const minimalBase = await shop.products.minimal.find("awesome-t-shirt");
+if (!minimalBase?.updatedAt) return null;
+
+const minimalEnhanced = await shop.products.minimal.findEnhanced("awesome-t-shirt", {
+  apiKey: "YOUR_WORKER_API_KEY",
+  updatedAt: minimalBase.updatedAt.toISOString(),
+});
+```
+
 ### showcased()
 
 ```typescript

@@ -7,6 +7,7 @@ describe("products.findEnhanced", () => {
   const handle = "test-product";
   const endpoint = "https://shopify-product-enrichment-worker.ninjacode.workers.dev";
   const customEndpoint = "https://custom-worker.dev/api";
+  const updatedAt = "2024-01-02T00:00:00Z";
 
   const singleProduct: ShopifySingleProduct = {
     id: 1,
@@ -206,9 +207,22 @@ describe("products.findEnhanced", () => {
     await expect(shop.products.findEnhanced(handle, {})).rejects.toThrow(/apiKey/i);
   });
 
+  test("throws when updatedAt missing", async () => {
+    const shop = new ShopClient(baseUrl);
+    await expect(
+      (shop.products as any).findEnhanced(handle, { apiKey: "test-key" })
+    ).rejects.toThrow(/updatedAt/i);
+    await expect(
+      (shop.products.minimal as any).findEnhanced(handle, { apiKey: "test-key" })
+    ).rejects.toThrow(/updatedAt/i);
+  });
+
   test("posts expected payload and returns response", async () => {
     const shop = new ShopClient(baseUrl);
-    const result = await shop.products.findEnhanced(handle, { apiKey: "test-key" });
+    const result = await shop.products.findEnhanced(handle, {
+      apiKey: "test-key",
+      updatedAt,
+    });
     const expectedProduct = (shop.productsDto([shopifyProduct], {
       minimal: false,
     }) as any)?.[0];
@@ -229,16 +243,17 @@ describe("products.findEnhanced", () => {
     expect(body).toEqual({
       storeDomain: "examplestore.com",
       handle,
-      updatedAt: "2024-01-02T00:00:00Z",
+      updatedAt,
     });
   });
 
   test("uses custom endpoint when provided", async () => {
     const shop = new ShopClient(baseUrl);
 
-    const result = await shop.products.findEnhanced(handle, { 
-      apiKey: "test-key", 
-      endpoint: customEndpoint 
+    const result = await shop.products.findEnhanced(handle, {
+      apiKey: "test-key",
+      updatedAt,
+      endpoint: customEndpoint,
     });
     
     const expectedProduct = (shop.productsDto([shopifyProduct], {
@@ -258,6 +273,7 @@ describe("products.findEnhanced", () => {
     const shop = new ShopClient(baseUrl);
     const result = await shop.products.minimal.findEnhanced(handle, {
       apiKey: "test-key",
+      updatedAt,
     });
     const expectedProduct = (shop.productsDto([shopifyProduct], {
       minimal: true,
@@ -273,7 +289,7 @@ describe("products.findEnhanced", () => {
     const shop = new ShopClient(baseUrl);
     const [base, enhanced] = await Promise.all([
       shop.products.find(handle),
-      shop.products.findEnhanced(handle, { apiKey: "test-key" }),
+      shop.products.findEnhanced(handle, { apiKey: "test-key", updatedAt }),
     ]);
 
     expect(base).not.toBeNull();
@@ -287,7 +303,7 @@ describe("products.findEnhanced", () => {
     const shop = new ShopClient(baseUrl);
     const [base, enhanced] = await Promise.all([
       shop.products.minimal.find(handle),
-      shop.products.minimal.findEnhanced(handle, { apiKey: "test-key" }),
+      shop.products.minimal.findEnhanced(handle, { apiKey: "test-key", updatedAt }),
     ]);
 
     expect(base).not.toBeNull();

@@ -51,11 +51,12 @@ export interface ProductOperations {
    * @param productHandle - The handle of the product to find.
    * @param options - Options for the request.
    * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
+   * @param options.updatedAt - Product updatedAt timestamp used to cache-bust/invalidate enrichment.
    * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
    */
   findEnhanced(
     productHandle: string,
-    options: { apiKey: string; endpoint?: string }
+    options: { apiKey: string; updatedAt: string; endpoint?: string }
   ): Promise<EnhancedProductResponse | null>;
 
   /**
@@ -178,7 +179,7 @@ export interface ProductOperations {
     ): Promise<MinimalProduct | null>;
     findEnhanced(
       productHandle: string,
-      options: { apiKey: string; endpoint?: string }
+      options: { apiKey: string; updatedAt: string; endpoint?: string }
     ): Promise<EnhancedProductResponse<MinimalProduct> | null>;
     showcased(): Promise<MinimalProduct[]>;
     predictiveSearch(
@@ -717,42 +718,26 @@ export function createProductOperations(
    * @param productHandle - The handle of the product to find.
    * @param options - Options for the request.
    * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
+   * @param options.updatedAt - Product updatedAt timestamp used to cache-bust/invalidate enrichment.
    * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
    */
   async function findEnhancedInternal(
     productHandle: string,
-    options: { apiKey: string; endpoint?: string }
+    options: { apiKey: string; updatedAt: string; endpoint?: string }
   ): Promise<EnhancedProductResponse | null> {
     const apiKey = options.apiKey;
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       throw new Error("apiKey is required");
     }
 
+    const updatedAt = options.updatedAt;
+    if (!updatedAt || typeof updatedAt !== "string" || !updatedAt.trim()) {
+      throw new Error("updatedAt is required");
+    }
+    const updatedAtTrimmed = updatedAt.trim();
+
     const baseProduct = await findInternal(productHandle, { minimal: false });
     if (!baseProduct) return null;
-
-    let updatedAt = baseProduct.updatedAt?.toISOString();
-    if (updatedAt?.endsWith(".000Z")) {
-      updatedAt = updatedAt.replace(".000Z", "Z");
-    }
-    if (!updatedAt) {
-      const url = `${baseUrl}products/${encodeURIComponent(baseProduct.handle)}.js`;
-      const resp = await rateLimitedFetch(url, {
-        rateLimitClass: "products:single",
-        timeoutMs: 7000,
-        retry: { maxRetries: 1, baseDelayMs: 200 },
-      });
-      if (!resp.ok) {
-        if (resp.status === 404) return null;
-        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-      }
-      const raw = (await resp.json()) as ShopifySingleProduct;
-      if (typeof raw.updated_at === "string" && raw.updated_at.trim()) {
-        updatedAt = raw.updated_at;
-      } else {
-        throw new Error("updatedAt missing for product");
-      }
-    }
 
     const endpoint =
       (typeof options.endpoint === "string" && options.endpoint.trim()) ||
@@ -774,7 +759,7 @@ export function createProductOperations(
       body: JSON.stringify({
         storeDomain: hostname,
         handle: baseProduct.handle,
-        updatedAt,
+        updatedAt: updatedAtTrimmed,
       }),
       rateLimitClass: "products:enhanced",
       timeoutMs: 15000,
@@ -824,40 +809,32 @@ export function createProductOperations(
     };
   }
 
+  /**
+   * Internal implementation of minimal.findEnhanced.
+   *
+   * @param productHandle - The handle of the product to find.
+   * @param options - Options for the request.
+   * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
+   * @param options.updatedAt - Product updatedAt timestamp used to cache-bust/invalidate enrichment.
+   * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
+   */
   async function findEnhancedMinimalInternal(
     productHandle: string,
-    options: { apiKey: string; endpoint?: string }
+    options: { apiKey: string; updatedAt: string; endpoint?: string }
   ): Promise<EnhancedProductResponse<MinimalProduct> | null> {
     const apiKey = options.apiKey;
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       throw new Error("apiKey is required");
     }
 
+    const updatedAt = options.updatedAt;
+    if (!updatedAt || typeof updatedAt !== "string" || !updatedAt.trim()) {
+      throw new Error("updatedAt is required");
+    }
+    const updatedAtTrimmed = updatedAt.trim();
+
     const baseProduct = await findInternal(productHandle, { minimal: false });
     if (!baseProduct) return null;
-
-    let updatedAt = baseProduct.updatedAt?.toISOString();
-    if (updatedAt?.endsWith(".000Z")) {
-      updatedAt = updatedAt.replace(".000Z", "Z");
-    }
-    if (!updatedAt) {
-      const url = `${baseUrl}products/${encodeURIComponent(baseProduct.handle)}.js`;
-      const resp = await rateLimitedFetch(url, {
-        rateLimitClass: "products:single",
-        timeoutMs: 7000,
-        retry: { maxRetries: 1, baseDelayMs: 200 },
-      });
-      if (!resp.ok) {
-        if (resp.status === 404) return null;
-        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-      }
-      const raw = (await resp.json()) as ShopifySingleProduct;
-      if (typeof raw.updated_at === "string" && raw.updated_at.trim()) {
-        updatedAt = raw.updated_at;
-      } else {
-        throw new Error("updatedAt missing for product");
-      }
-    }
 
     const endpoint =
       (typeof options.endpoint === "string" && options.endpoint.trim()) ||
@@ -879,7 +856,7 @@ export function createProductOperations(
       body: JSON.stringify({
         storeDomain: hostname,
         handle: baseProduct.handle,
-        updatedAt,
+        updatedAt: updatedAtTrimmed,
       }),
       rateLimitClass: "products:enhanced",
       timeoutMs: 15000,
@@ -1027,7 +1004,7 @@ export function createProductOperations(
 
     findEnhanced: async (
       productHandle: string,
-      options: { apiKey: string; endpoint?: string }
+      options: { apiKey: string; updatedAt: string; endpoint?: string }
     ): Promise<EnhancedProductResponse | null> =>
       findEnhancedInternal(productHandle, options),
 
@@ -1450,7 +1427,7 @@ export function createProductOperations(
       },
       findEnhanced: async (
         productHandle: string,
-        options: { apiKey: string; endpoint?: string }
+        options: { apiKey: string; updatedAt: string; endpoint?: string }
       ): Promise<EnhancedProductResponse<MinimalProduct> | null> => {
         return findEnhancedMinimalInternal(productHandle, options);
       },

@@ -123,6 +123,28 @@ async function getShowcasedProducts() {
 getShowcasedProducts();
 ```
 
+### 2e. Enhanced Product Content (Worker)
+
+```typescript
+import { ShopClient } from "shop-client";
+
+async function getEnhancedProduct(handle: string) {
+  const shop = new ShopClient("anuki.in");
+
+  const base = await shop.products.find(handle);
+  if (!base?.updatedAt) return null;
+
+  return shop.products.findEnhanced(handle, {
+    apiKey: "YOUR_WORKER_API_KEY",
+    updatedAt: base.updatedAt.toISOString(),
+  });
+}
+
+const enhanced = await getEnhancedProduct("awesome-t-shirt");
+console.log(enhanced?.cache);
+console.log(enhanced?.enrichment.canonical.title);
+```
+
 ### 3. Product Search and Filtering
 
 ```typescript
