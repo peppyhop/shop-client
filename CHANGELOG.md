@@ -1,3 +1,9 @@
+## [3.18.1](https://github.com/peppyhop/shop-client/compare/v3.18.0...v3.18.1) (2026-01-02)
+
+### Bug Fixes
+
+* **products:** make apiKey required in findEnhanced options ([#39](https://github.com/peppyhop/shop-client/issues/39)) ([ee0fd58](https://github.com/peppyhop/shop-client/commit/ee0fd581cc02f1ed287007c844b24638ab4d83f4))
+
 ## [3.18.0](https://github.com/peppyhop/shop-client/compare/v3.17.0...v3.18.0) (2025-12-31)
 
 ### Features
