@@ -240,6 +240,12 @@ export async function rateLimitedFetch(
     timeoutMs: _timeoutMs,
     ...fetchInit
   } = effInit;
+
+  // Default redirect to "follow" if not specified
+  if (fetchInit.redirect === undefined) {
+    fetchInit.redirect = "follow";
+  }
+
   const klass = init?.rateLimitClass;
   const byClass = klass ? classLimiters.get(klass) : undefined;
   const byHost = getHostLimiter(getHost(input));

@@ -50,12 +50,12 @@ export interface ProductOperations {
    *
    * @param productHandle - The handle of the product to find.
    * @param options - Options for the request.
-   * @param options.apiKey - API key for the enhancement service.
+   * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
    * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
    */
   findEnhanced(
     productHandle: string,
-    options?: { apiKey?: string; endpoint?: string }
+    options: { apiKey: string; endpoint?: string }
   ): Promise<EnhancedProductResponse | null>;
 
   /**
@@ -707,11 +707,19 @@ export function createProductOperations(
     return finalProducts ?? [];
   }
 
+  /**
+   * Internal implementation of findEnhanced.
+   *
+   * @param productHandle - The handle of the product to find.
+   * @param options - Options for the request.
+   * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
+   * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
+   */
   async function findEnhancedInternal(
     productHandle: string,
-    options?: { apiKey?: string; endpoint?: string }
+    options: { apiKey: string; endpoint?: string }
   ): Promise<EnhancedProductResponse | null> {
-    const apiKey = options?.apiKey;
+    const apiKey = options.apiKey;
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       throw new Error("apiKey is required");
     }
@@ -880,7 +888,7 @@ export function createProductOperations(
 
     findEnhanced: async (
       productHandle: string,
-      options?: { apiKey?: string; endpoint?: string }
+      options: { apiKey: string; endpoint?: string }
     ): Promise<EnhancedProductResponse | null> =>
       findEnhancedInternal(productHandle, options),
 

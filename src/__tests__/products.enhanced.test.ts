@@ -116,7 +116,10 @@ describe("products.findEnhanced", () => {
 
   test("throws when apiKey missing", async () => {
     const shop = new ShopClient(baseUrl);
+    // @ts-expect-error Testing runtime validation
     await expect(shop.products.findEnhanced(handle)).rejects.toThrow(/apiKey/i);
+    // @ts-expect-error Testing runtime validation
+    await expect(shop.products.findEnhanced(handle, {})).rejects.toThrow(/apiKey/i);
   });
 
   test("posts expected payload and returns response", async () => {
