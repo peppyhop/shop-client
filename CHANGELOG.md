@@ -1,3 +1,9 @@
+## [3.21.0](https://github.com/peppyhop/shop-client/compare/v3.20.0...v3.21.0) (2026-01-02)
+
+### Features
+
+* **products:** make updatedAt optional in findEnhanced ([#42](https://github.com/peppyhop/shop-client/issues/42)) ([527a962](https://github.com/peppyhop/shop-client/commit/527a962b6bf26b0cd561e092d0825ed65a25b6a5))
+
 ## [3.20.0](https://github.com/peppyhop/shop-client/compare/v3.19.0...v3.20.0) (2026-01-02)
 
 ### Features
