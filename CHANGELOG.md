@@ -1,3 +1,9 @@
+## [3.20.0](https://github.com/peppyhop/shop-client/compare/v3.19.0...v3.20.0) (2026-01-02)
+
+### Features
+
+* **products:** add updatedAt requirement for enhanced product lookup ([#41](https://github.com/peppyhop/shop-client/issues/41)) ([b46a497](https://github.com/peppyhop/shop-client/commit/b46a497c911ca4c48201326ea3a35a1a13ba9028))
+
 ## [3.19.0](https://github.com/peppyhop/shop-client/compare/v3.18.1...v3.19.0) (2026-01-02)
 
 ### Features
