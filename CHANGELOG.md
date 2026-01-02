@@ -1,3 +1,9 @@
+## [3.19.0](https://github.com/peppyhop/shop-client/compare/v3.18.1...v3.19.0) (2026-01-02)
+
+### Features
+
+* **products:** add minimal product support for enhanced search ([#40](https://github.com/peppyhop/shop-client/issues/40)) ([f43673f](https://github.com/peppyhop/shop-client/commit/f43673f3fe2b77179cf1d7a6acb0af806f3774f2))
+
 ## [3.18.1](https://github.com/peppyhop/shop-client/compare/v3.18.0...v3.18.1) (2026-01-02)
 
 ### Bug Fixes
