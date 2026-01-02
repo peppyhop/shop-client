@@ -51,12 +51,12 @@ export interface ProductOperations {
    * @param productHandle - The handle of the product to find.
    * @param options - Options for the request.
    * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
-   * @param options.updatedAt - Product updatedAt timestamp used to cache-bust/invalidate enrichment.
+   * @param options.updatedAt - Optional product updatedAt timestamp used to cache-bust/invalidate enrichment.
    * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
    */
   findEnhanced(
     productHandle: string,
-    options: { apiKey: string; updatedAt: string; endpoint?: string }
+    options: { apiKey: string; updatedAt?: string; endpoint?: string }
   ): Promise<EnhancedProductResponse | null>;
 
   /**
@@ -179,7 +179,7 @@ export interface ProductOperations {
     ): Promise<MinimalProduct | null>;
     findEnhanced(
       productHandle: string,
-      options: { apiKey: string; updatedAt: string; endpoint?: string }
+      options: { apiKey: string; updatedAt?: string; endpoint?: string }
     ): Promise<EnhancedProductResponse<MinimalProduct> | null>;
     showcased(): Promise<MinimalProduct[]>;
     predictiveSearch(
@@ -718,23 +718,26 @@ export function createProductOperations(
    * @param productHandle - The handle of the product to find.
    * @param options - Options for the request.
    * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
-   * @param options.updatedAt - Product updatedAt timestamp used to cache-bust/invalidate enrichment.
+   * @param options.updatedAt - Optional product updatedAt timestamp used to cache-bust/invalidate enrichment.
    * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
    */
   async function findEnhancedInternal(
     productHandle: string,
-    options: { apiKey: string; updatedAt: string; endpoint?: string }
+    options: { apiKey: string; updatedAt?: string; endpoint?: string }
   ): Promise<EnhancedProductResponse | null> {
     const apiKey = options.apiKey;
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       throw new Error("apiKey is required");
     }
 
-    const updatedAt = options.updatedAt;
-    if (!updatedAt || typeof updatedAt !== "string" || !updatedAt.trim()) {
-      throw new Error("updatedAt is required");
+    const updatedAt = (options as any).updatedAt as unknown;
+    let updatedAtTrimmed: string | undefined;
+    if (typeof updatedAt === "string") {
+      const trimmed = updatedAt.trim();
+      updatedAtTrimmed = trimmed ? trimmed : undefined;
+    } else if (updatedAt != null) {
+      throw new Error("updatedAt must be a string");
     }
-    const updatedAtTrimmed = updatedAt.trim();
 
     const baseProduct = await findInternal(productHandle, { minimal: false });
     if (!baseProduct) return null;
@@ -759,7 +762,7 @@ export function createProductOperations(
       body: JSON.stringify({
         storeDomain: hostname,
         handle: baseProduct.handle,
-        updatedAt: updatedAtTrimmed,
+        ...(updatedAtTrimmed ? { updatedAt: updatedAtTrimmed } : {}),
       }),
       rateLimitClass: "products:enhanced",
       timeoutMs: 15000,
@@ -815,23 +818,26 @@ export function createProductOperations(
    * @param productHandle - The handle of the product to find.
    * @param options - Options for the request.
    * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
-   * @param options.updatedAt - Product updatedAt timestamp used to cache-bust/invalidate enrichment.
+   * @param options.updatedAt - Optional product updatedAt timestamp used to cache-bust/invalidate enrichment.
    * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
    */
   async function findEnhancedMinimalInternal(
     productHandle: string,
-    options: { apiKey: string; updatedAt: string; endpoint?: string }
+    options: { apiKey: string; updatedAt?: string; endpoint?: string }
   ): Promise<EnhancedProductResponse<MinimalProduct> | null> {
     const apiKey = options.apiKey;
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       throw new Error("apiKey is required");
     }
 
-    const updatedAt = options.updatedAt;
-    if (!updatedAt || typeof updatedAt !== "string" || !updatedAt.trim()) {
-      throw new Error("updatedAt is required");
+    const updatedAt = (options as any).updatedAt as unknown;
+    let updatedAtTrimmed: string | undefined;
+    if (typeof updatedAt === "string") {
+      const trimmed = updatedAt.trim();
+      updatedAtTrimmed = trimmed ? trimmed : undefined;
+    } else if (updatedAt != null) {
+      throw new Error("updatedAt must be a string");
     }
-    const updatedAtTrimmed = updatedAt.trim();
 
     const baseProduct = await findInternal(productHandle, { minimal: false });
     if (!baseProduct) return null;
@@ -856,7 +862,7 @@ export function createProductOperations(
       body: JSON.stringify({
         storeDomain: hostname,
         handle: baseProduct.handle,
-        updatedAt: updatedAtTrimmed,
+        ...(updatedAtTrimmed ? { updatedAt: updatedAtTrimmed } : {}),
       }),
       rateLimitClass: "products:enhanced",
       timeoutMs: 15000,
@@ -1004,7 +1010,7 @@ export function createProductOperations(
 
     findEnhanced: async (
       productHandle: string,
-      options: { apiKey: string; updatedAt: string; endpoint?: string }
+      options: { apiKey: string; updatedAt?: string; endpoint?: string }
     ): Promise<EnhancedProductResponse | null> =>
       findEnhancedInternal(productHandle, options),
 
@@ -1427,7 +1433,7 @@ export function createProductOperations(
       },
       findEnhanced: async (
         productHandle: string,
-        options: { apiKey: string; updatedAt: string; endpoint?: string }
+        options: { apiKey: string; updatedAt?: string; endpoint?: string }
       ): Promise<EnhancedProductResponse<MinimalProduct> | null> => {
         return findEnhancedMinimalInternal(productHandle, options);
       },

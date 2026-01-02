@@ -207,14 +207,14 @@ describe("products.findEnhanced", () => {
     await expect(shop.products.findEnhanced(handle, {})).rejects.toThrow(/apiKey/i);
   });
 
-  test("throws when updatedAt missing", async () => {
+  test("allows missing updatedAt", async () => {
     const shop = new ShopClient(baseUrl);
     await expect(
-      (shop.products as any).findEnhanced(handle, { apiKey: "test-key" })
-    ).rejects.toThrow(/updatedAt/i);
+      shop.products.findEnhanced(handle, { apiKey: "test-key" })
+    ).resolves.toBeDefined();
     await expect(
-      (shop.products.minimal as any).findEnhanced(handle, { apiKey: "test-key" })
-    ).rejects.toThrow(/updatedAt/i);
+      shop.products.minimal.findEnhanced(handle, { apiKey: "test-key" })
+    ).resolves.toBeDefined();
   });
 
   test("posts expected payload and returns response", async () => {
@@ -244,6 +244,22 @@ describe("products.findEnhanced", () => {
       storeDomain: "examplestore.com",
       handle,
       updatedAt,
+    });
+  });
+
+  test("omits updatedAt from payload when missing", async () => {
+    const shop = new ShopClient(baseUrl);
+    await shop.products.findEnhanced(handle, { apiKey: "test-key" });
+
+    const fetchMock = global.fetch as unknown as jest.Mock;
+    const call = (fetchMock.mock.calls as any[]).find((c) => c[0] === endpoint);
+    expect(call).toBeDefined();
+
+    const init = call?.[1] ?? {};
+    const body = JSON.parse(init.body);
+    expect(body).toEqual({
+      storeDomain: "examplestore.com",
+      handle,
     });
   });
 
