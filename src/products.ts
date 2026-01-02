@@ -176,6 +176,10 @@ export interface ProductOperations {
       productHandle: string,
       options?: { currency?: CurrencyCode }
     ): Promise<MinimalProduct | null>;
+    findEnhanced(
+      productHandle: string,
+      options: { apiKey: string; endpoint?: string }
+    ): Promise<EnhancedProductResponse<MinimalProduct> | null>;
     showcased(): Promise<MinimalProduct[]>;
     predictiveSearch(
       query: string,
@@ -751,7 +755,7 @@ export function createProductOperations(
     }
 
     const endpoint =
-      (typeof options?.endpoint === "string" && options.endpoint.trim()) ||
+      (typeof options.endpoint === "string" && options.endpoint.trim()) ||
       "https://shopify-product-enrichment-worker.ninjacode.workers.dev";
 
     let hostname = storeDomain;
@@ -791,7 +795,142 @@ export function createProductOperations(
     if (!("shopify" in o) || !("enrichment" in o) || !("cache" in o)) {
       throw new Error("Invalid enhanced product response");
     }
-    return data as EnhancedProductResponse;
+    const parsed = data as {
+      shopify: unknown;
+      enrichment: EnhancedProductResponse["enrichment"];
+      cache: EnhancedProductResponse["cache"];
+    };
+    let mappedProduct: Product = baseProduct;
+    try {
+      const raw = parsed.shopify;
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        if ("body_html" in raw) {
+          const mapped = productsDto([raw as ShopifyProduct], {
+            minimal: false,
+          });
+          const first = Array.isArray(mapped) ? mapped[0] : null;
+          if (first) mappedProduct = first as Product;
+        } else if ("description" in raw) {
+          mappedProduct = productDto(raw as ShopifySingleProduct, {
+            minimal: false,
+          }) as Product;
+        }
+      }
+    } catch {}
+    return {
+      enrichment: parsed.enrichment,
+      cache: parsed.cache,
+      product: mappedProduct,
+    };
+  }
+
+  async function findEnhancedMinimalInternal(
+    productHandle: string,
+    options: { apiKey: string; endpoint?: string }
+  ): Promise<EnhancedProductResponse<MinimalProduct> | null> {
+    const apiKey = options.apiKey;
+    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+      throw new Error("apiKey is required");
+    }
+
+    const baseProduct = await findInternal(productHandle, { minimal: false });
+    if (!baseProduct) return null;
+
+    let updatedAt = baseProduct.updatedAt?.toISOString();
+    if (updatedAt?.endsWith(".000Z")) {
+      updatedAt = updatedAt.replace(".000Z", "Z");
+    }
+    if (!updatedAt) {
+      const url = `${baseUrl}products/${encodeURIComponent(baseProduct.handle)}.js`;
+      const resp = await rateLimitedFetch(url, {
+        rateLimitClass: "products:single",
+        timeoutMs: 7000,
+        retry: { maxRetries: 1, baseDelayMs: 200 },
+      });
+      if (!resp.ok) {
+        if (resp.status === 404) return null;
+        throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+      }
+      const raw = (await resp.json()) as ShopifySingleProduct;
+      if (typeof raw.updated_at === "string" && raw.updated_at.trim()) {
+        updatedAt = raw.updated_at;
+      } else {
+        throw new Error("updatedAt missing for product");
+      }
+    }
+
+    const endpoint =
+      (typeof options.endpoint === "string" && options.endpoint.trim()) ||
+      "https://shopify-product-enrichment-worker.ninjacode.workers.dev";
+
+    let hostname = storeDomain;
+    try {
+      hostname = new URL(storeDomain).hostname;
+    } catch {
+      hostname = storeDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    }
+
+    const resp = await rateLimitedFetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        storeDomain: hostname,
+        handle: baseProduct.handle,
+        updatedAt,
+      }),
+      rateLimitClass: "products:enhanced",
+      timeoutMs: 15000,
+      retry: {
+        maxRetries: 2,
+        baseDelayMs: 300,
+        retryOnStatuses: [429, 500, 502, 503, 504],
+      },
+    });
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    }
+    const data: unknown = await resp.json();
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("Invalid enhanced product response");
+    }
+    const o = data as Record<string, unknown>;
+    if (!("shopify" in o) || !("enrichment" in o) || !("cache" in o)) {
+      throw new Error("Invalid enhanced product response");
+    }
+    const parsed = data as {
+      shopify: unknown;
+      enrichment: EnhancedProductResponse["enrichment"];
+      cache: EnhancedProductResponse["cache"];
+    };
+    let mappedMinimal: MinimalProduct | null = null;
+    try {
+      const raw = parsed.shopify;
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        if ("body_html" in raw) {
+          const mapped = productsDto([raw as ShopifyProduct], {
+            minimal: true,
+          });
+          const first = Array.isArray(mapped) ? mapped[0] : null;
+          mappedMinimal = (first as MinimalProduct) || null;
+        } else if ("description" in raw) {
+          mappedMinimal = productDto(raw as ShopifySingleProduct, {
+            minimal: true,
+          }) as MinimalProduct;
+        }
+      }
+    } catch {}
+    if (!mappedMinimal) {
+      mappedMinimal = await findInternal(baseProduct.handle, { minimal: true });
+    }
+    if (!mappedMinimal) return null;
+    return {
+      enrichment: parsed.enrichment,
+      cache: parsed.cache,
+      product: mappedMinimal,
+    };
   }
 
   const operations: ProductOperations = {
@@ -1308,6 +1447,12 @@ export function createProductOperations(
           minimal: true,
           currency: options?.currency,
         });
+      },
+      findEnhanced: async (
+        productHandle: string,
+        options: { apiKey: string; endpoint?: string }
+      ): Promise<EnhancedProductResponse<MinimalProduct> | null> => {
+        return findEnhancedMinimalInternal(productHandle, options);
       },
       showcased: async (): Promise<MinimalProduct[]> => {
         const res = await operations.showcase.minimal();

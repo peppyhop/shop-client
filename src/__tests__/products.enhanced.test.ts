@@ -6,6 +6,7 @@ describe("products.findEnhanced", () => {
   const baseUrl = "https://examplestore.com/";
   const handle = "test-product";
   const endpoint = "https://shopify-product-enrichment-worker.ninjacode.workers.dev";
+  const customEndpoint = "https://custom-worker.dev/api";
 
   const singleProduct: ShopifySingleProduct = {
     id: 1,
@@ -15,8 +16,8 @@ describe("products.findEnhanced", () => {
     updated_at: "2024-01-02T00:00:00Z",
     vendor: "Vendor",
     tags: [],
-    options: [],
-    description: "Description",
+    options: [{ name: "Size", position: 1, values: ["S", "M"] }],
+    description: "<p>Description</p>",
     published_at: "2024-01-01T00:00:00Z",
     type: "Type",
     price: 100,
@@ -24,37 +25,94 @@ describe("products.findEnhanced", () => {
     price_max: 100,
     available: true,
     price_varies: false,
-    compare_at_price: null,
-    compare_at_price_min: 0,
-    compare_at_price_max: 0,
+    compare_at_price: 200,
+    compare_at_price_min: 200,
+    compare_at_price_max: 200,
     compare_at_price_varies: false,
-    variants: [],
-    images: [],
-    featured_image: null,
+    variants: [
+      {
+        id: 101,
+        title: "Default Title",
+        handle: "default-title",
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-02T00:00:00Z",
+        option1: "S",
+        option2: null,
+        option3: null,
+        sku: null,
+        requires_shipping: true,
+        taxable: true,
+        position: 1,
+        product_id: 1,
+        featured_image: null,
+        featured_media: null,
+        available: true,
+        price: "1.00",
+        compare_at_price: "2.00",
+        inventory_quantity: 0,
+        inventory_management: null,
+      },
+    ],
+    images: ["https://example.com/img.jpg"],
+    featured_image: "https://example.com/img.jpg",
     url: undefined,
     media: [],
     requires_selling_plan: false,
     selling_plan_groups: [],
   } as any;
 
-  const shopify: ShopifyProduct = {
+  const shopifyProduct: ShopifyProduct = {
     id: 1,
     title: "Test Product",
     handle,
-    body_html: "<p>Body</p>",
-    published_at: "2024-01-01T00:00:00Z",
-    product_type: "Type",
     created_at: "2024-01-01T00:00:00Z",
     updated_at: "2024-01-02T00:00:00Z",
     vendor: "Vendor",
-    tags: ["Tag"],
-    images: [],
-    options: [],
-    variants: [],
+    tags: [],
+    options: [{ name: "Size", position: 1, values: ["S", "M"] }],
+    body_html: "<p>Description</p>",
+    published_at: "2024-01-01T00:00:00Z",
+    product_type: "Type",
+    variants: [
+      {
+        id: 101,
+        title: "Default Title",
+        handle: "default-title",
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-02T00:00:00Z",
+        option1: "S",
+        option2: null,
+        option3: null,
+        sku: null,
+        requires_shipping: true,
+        taxable: true,
+        position: 1,
+        product_id: 1,
+        featured_image: null,
+        available: true,
+        price: "1.00",
+        compare_at_price: "2.00",
+      },
+    ],
+    images: [
+      {
+        id: 201,
+        title: "img",
+        handle: "img",
+        created_at: "2024-01-01T00:00:00Z",
+        updated_at: "2024-01-02T00:00:00Z",
+        src: "https://example.com/img.jpg",
+        position: 1,
+        product_id: 1,
+        variant_ids: [],
+        width: 100,
+        height: 100,
+      },
+    ],
   } as any;
 
-  const enhancedResponse = {
-    shopify,
+  const workerEnhancedResponse = {
+    shopify: shopifyProduct,
     enrichment: {
       canonical: {
         title: "Canonical Title",
@@ -91,7 +149,7 @@ describe("products.findEnhanced", () => {
         } as any;
       }
 
-      if (url === endpoint) {
+      if (url === endpoint || url === customEndpoint) {
         const headers = init?.headers ?? {};
         const apiKey =
           typeof headers.get === "function"
@@ -104,7 +162,7 @@ describe("products.findEnhanced", () => {
 
         return {
           ok: true,
-          json: async () => enhancedResponse,
+          json: async () => workerEnhancedResponse,
         } as any;
       }
 
@@ -113,6 +171,32 @@ describe("products.findEnhanced", () => {
 
     (global as any).fetch = mockFetch;
   });
+
+  function expectCoreProductFieldsMatch(
+    a: any,
+    b: any
+  ) {
+    expect(a).toBeDefined();
+    expect(b).toBeDefined();
+
+    expect(a.handle).toBe(b.handle);
+    expect(a.platformId).toBe(b.platformId);
+    expect(a.title).toBe(b.title);
+    expect(a.slug).toBe(b.slug);
+    expect(a.url).toBe(b.url);
+    expect(a.available).toBe(b.available);
+    expect(a.price).toBe(b.price);
+    expect(a.priceMin).toBe(b.priceMin);
+    expect(a.priceMax).toBe(b.priceMax);
+    expect(a.compareAtPrice).toBe(b.compareAtPrice);
+    expect(a.compareAtPriceMin).toBe(b.compareAtPriceMin);
+    expect(a.compareAtPriceMax).toBe(b.compareAtPriceMax);
+    expect(a.discount).toBe(b.discount);
+    expect(a.vendor).toBe(b.vendor);
+    expect(a.productType).toBe(b.productType);
+    expect(a.storeDomain).toBe(b.storeDomain);
+    expect(a.storeSlug).toBe(b.storeSlug);
+  }
 
   test("throws when apiKey missing", async () => {
     const shop = new ShopClient(baseUrl);
@@ -125,7 +209,14 @@ describe("products.findEnhanced", () => {
   test("posts expected payload and returns response", async () => {
     const shop = new ShopClient(baseUrl);
     const result = await shop.products.findEnhanced(handle, { apiKey: "test-key" });
-    expect(result).toEqual(enhancedResponse);
+    const expectedProduct = (shop.productsDto([shopifyProduct], {
+      minimal: false,
+    }) as any)?.[0];
+    expect(result).toEqual({
+      product: expectedProduct,
+      enrichment: workerEnhancedResponse.enrichment,
+      cache: workerEnhancedResponse.cache,
+    });
 
     const fetchMock = global.fetch as unknown as jest.Mock;
     const call = (fetchMock.mock.calls as any[]).find((c) => c[0] === endpoint);
@@ -143,58 +234,66 @@ describe("products.findEnhanced", () => {
   });
 
   test("uses custom endpoint when provided", async () => {
-    const customEndpoint = "https://custom-worker.dev/api";
     const shop = new ShopClient(baseUrl);
-    
-    // Setup fetch mock to handle custom endpoint
-    const fetchMock = global.fetch as unknown as jest.Mock;
-    fetchMock.mockImplementationOnce(async (input: any, init?: any) => {
-      const url = typeof input === "string" ? input : input?.url ?? "";
-      if (url === customEndpoint) {
-        return {
-          ok: true,
-          json: async () => enhancedResponse,
-        } as any;
-      }
-      // Delegate to default mock logic for other URLs
-      // Note: We need to reimplement basic mock logic since mockImplementationOnce replaces it for this call
-      if (url === `${baseUrl}products/${handle}.js`) {
-        return { ok: true, json: async () => singleProduct } as any;
-      }
-      if (url === `${baseUrl}products/${handle}`) {
-        return { ok: true, url, text: async () => "<html></html>" } as any;
-      }
-      return { ok: false, status: 404 } as any;
-    });
-
-    // We need to re-mock specifically for this test because the default mock logic 
-    // is set in beforeEach but we want to intercept the custom endpoint call.
-    // However, simplest way is to rely on beforeEach and just update the logic there? 
-    // But beforeEach is already set.
-    // Let's just modify the test to update the mock behavior temporarily or checking arguments.
-    
-    // Resetting mock implementation to handle the custom endpoint check more cleanly
-    fetchMock.mockImplementation(async (input: any, init?: any) => {
-      const url = typeof input === "string" ? input : input?.url ?? "";
-      
-      if (url === customEndpoint) {
-         return { ok: true, json: async () => enhancedResponse } as any;
-      }
-      // Standard checks from beforeEach
-      if (url === `${baseUrl}products/${handle}`) return { ok: true, url, text: async () => "<html></html>" } as any;
-      if (url === `${baseUrl}products/${handle}.js`) return { ok: true, json: async () => singleProduct } as any;
-      if (url === endpoint) return { ok: true, json: async () => enhancedResponse } as any;
-      
-      return { ok: false, status: 404 } as any;
-    });
 
     const result = await shop.products.findEnhanced(handle, { 
       apiKey: "test-key", 
       endpoint: customEndpoint 
     });
     
-    expect(result).toEqual(enhancedResponse);
+    const expectedProduct = (shop.productsDto([shopifyProduct], {
+      minimal: false,
+    }) as any)?.[0];
+    expect(result).toEqual({
+      product: expectedProduct,
+      enrichment: workerEnhancedResponse.enrichment,
+      cache: workerEnhancedResponse.cache,
+    });
+    const fetchMock = global.fetch as unknown as jest.Mock;
     const call = (fetchMock.mock.calls as any[]).find((c) => c[0] === customEndpoint);
     expect(call).toBeDefined();
+  });
+
+  test("minimal.findEnhanced applies minimal DTO transforms", async () => {
+    const shop = new ShopClient(baseUrl);
+    const result = await shop.products.minimal.findEnhanced(handle, {
+      apiKey: "test-key",
+    });
+    const expectedProduct = (shop.productsDto([shopifyProduct], {
+      minimal: true,
+    }) as any)?.[0];
+    expect(result).toEqual({
+      product: expectedProduct,
+      enrichment: workerEnhancedResponse.enrichment,
+      cache: workerEnhancedResponse.cache,
+    });
+  });
+
+  test("findEnhanced.product matches find() response for core fields", async () => {
+    const shop = new ShopClient(baseUrl);
+    const [base, enhanced] = await Promise.all([
+      shop.products.find(handle),
+      shop.products.findEnhanced(handle, { apiKey: "test-key" }),
+    ]);
+
+    expect(base).not.toBeNull();
+    expect(enhanced).not.toBeNull();
+    if (!base || !enhanced) return;
+
+    expectCoreProductFieldsMatch(enhanced.product, base);
+  });
+
+  test("minimal.findEnhanced.product matches minimal.find() response", async () => {
+    const shop = new ShopClient(baseUrl);
+    const [base, enhanced] = await Promise.all([
+      shop.products.minimal.find(handle),
+      shop.products.minimal.findEnhanced(handle, { apiKey: "test-key" }),
+    ]);
+
+    expect(base).not.toBeNull();
+    expect(enhanced).not.toBeNull();
+    if (!base || !enhanced) return;
+
+    expect(enhanced.product).toEqual(base);
   });
 });

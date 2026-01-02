@@ -712,9 +712,9 @@ export type EnhancedProductEnrichment = {
 /**
  * The response object from the enhanced product search.
  */
-export type EnhancedProductResponse = {
-  /** The original Shopify product data. */
-  shopify: ShopifyProduct;
+export type EnhancedProductResponse<TProduct = Product> = {
+  /** The product data after DTO transformations. */
+  product: TProduct;
   /** The AI-enriched content. */
   enrichment: EnhancedProductEnrichment;
   /** Cache status of the response (e.g., 'hit', 'miss'). */
