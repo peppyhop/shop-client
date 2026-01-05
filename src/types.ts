@@ -799,3 +799,66 @@ export type StoreTypeBreakdown = Partial<
     >
   >
 >;
+
+export type AdminOrderCreateLineItem = {
+  variant_id: number;
+  quantity: number;
+};
+
+export type AdminOrderCreateCustomer = {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+};
+
+export type AdminOrderCreateAddress = {
+  first_name?: string;
+  last_name?: string;
+  address1?: string;
+  address2?: string;
+  city?: string;
+  province?: string;
+  zip?: string;
+  country?: string;
+  phone?: string;
+};
+
+export type AdminOrderCreateInput = {
+  email?: string;
+  currency?: CurrencyCode | string;
+  financial_status?:
+    | "pending"
+    | "authorized"
+    | "partially_paid"
+    | "paid"
+    | "partially_refunded"
+    | "refunded"
+    | "voided";
+  fulfillment_status?: "fulfilled" | "partial" | "unfulfilled";
+  send_receipt?: boolean;
+  send_fulfillment_receipt?: boolean;
+  note?: string;
+  tags?: string;
+  line_items: AdminOrderCreateLineItem[];
+  customer?: AdminOrderCreateCustomer;
+  shipping_address?: AdminOrderCreateAddress;
+  billing_address?: AdminOrderCreateAddress;
+};
+
+export type AdminOrderTrackingFulfillment = {
+  id?: number;
+  status?: string;
+  trackingCompany?: string;
+  trackingNumbers: string[];
+  trackingUrls: string[];
+};
+
+export type AdminOrderTracking = {
+  id: number;
+  name?: string;
+  financialStatus?: string;
+  fulfillmentStatus?: string;
+  cancelledAt: string | null;
+  orderStatusUrl: string | null;
+  fulfillments: AdminOrderTrackingFulfillment[];
+};

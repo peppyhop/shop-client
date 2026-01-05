@@ -6,6 +6,8 @@ import type { CollectionOperations } from "./collections";
 import { createCollectionOperations } from "./collections";
 import { collectionsDto as dtoCollections } from "./dto/collections.dto";
 import { mapProductDto, mapProductsDto } from "./dto/products.mapped";
+import type { OrderOperations } from "./orders";
+import { createOrderOperations } from "./orders";
 import type { ProductOperations } from "./products";
 import { createProductOperations } from "./products";
 import type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
@@ -74,6 +76,7 @@ export class ShopClient {
   public products: ProductOperations;
   public collections: CollectionOperations;
   public checkout: CheckoutOperations;
+  public orders: OrderOperations;
   public shopOperations: ShopOperations;
 
   /**
@@ -210,6 +213,10 @@ export class ShopClient {
     );
 
     this.checkout = createCheckoutOperations(this.baseUrl);
+    this.orders = createOrderOperations({
+      storeDomain: this.storeDomain,
+      defaultApiVersion: "2026-01",
+    });
   }
 
   /**
@@ -770,11 +777,14 @@ export class ShopClient {
 export { classifyProduct, generateSEOContent } from "./ai/enrich";
 export type { CheckoutOperations } from "./checkout";
 export type { CollectionOperations } from "./collections";
+export type { OrderOperations } from "./orders";
 // Export operation interfaces
 export type { ProductOperations } from "./products";
 export type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
 // Export selected types for external use (excluding Shopify-prefixed types)
 export type {
+  AdminOrderCreateInput,
+  AdminOrderTracking,
   Collection,
   CountryDetectionResult,
   CountryScores,
