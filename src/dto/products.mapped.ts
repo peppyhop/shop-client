@@ -87,6 +87,54 @@ function mapVariants(
   });
 }
 
+function buildVariantImagesMap(
+  product: ShopifyProduct | ShopifySingleProduct,
+  ctx: Ctx
+): Record<string, string[]> {
+  const map = new Map<string, Set<string>>();
+
+  const add = (variantId: unknown, src: unknown) => {
+    if (variantId == null) return;
+    if (typeof src !== "string" || !src.trim()) return;
+    const key = String(variantId);
+    const normalized = ctx.normalizeImageUrl(src);
+    if (!normalized) return;
+    const existing = map.get(key) ?? new Set<string>();
+    existing.add(normalized);
+    map.set(key, existing);
+  };
+
+  const variants = product.variants ?? [];
+  for (const variant of variants as Array<
+    ShopifyProductVariant | ShopifySingleProductVariant
+  >) {
+    const featured = variant.featured_image as any;
+    if (featured && typeof featured === "object") {
+      add(variant.id, featured.src);
+    }
+  }
+
+  if ("images" in product && Array.isArray(product.images)) {
+    const images = product.images as unknown[];
+    for (const img of images) {
+      if (!img || typeof img !== "object") continue;
+      const o = img as Record<string, unknown>;
+      const src = o.src;
+      const variantIds = o.variant_ids;
+      if (!Array.isArray(variantIds)) continue;
+      for (const variantId of variantIds) {
+        add(variantId, src);
+      }
+    }
+  }
+
+  const out: Record<string, string[]> = {};
+  for (const [variantId, urls] of map.entries()) {
+    out[variantId] = Array.from(urls);
+  }
+  return out;
+}
+
 export function mapProductsDto(
   products: ShopifyProduct[] | null,
   ctx: Ctx,
@@ -130,6 +178,7 @@ export function mapProductsDto(
     });
     const url = `${ctx.storeDomain}/products/${product.handle}`;
     const discount = calculateDiscount(priceMin, compareAtMin);
+    const variantImages = buildVariantImagesMap(product, ctx);
 
     if (isMinimal) {
       const minimal: MinimalProduct = {
@@ -144,6 +193,7 @@ export function mapProductsDto(
         featuredImage: product.images?.[0]?.src
           ? ctx.normalizeImageUrl(product.images[0].src)
           : null,
+        variantImages,
         available: mappedVariants.some((v) => v.available),
         localizedPricing: {
           priceFormatted: ctx.formatPrice(priceMin),
@@ -218,6 +268,7 @@ export function mapProductsDto(
         createdAt: image.created_at,
         updatedAt: image.updated_at,
       })),
+      variantImages,
       publishedAt: safeParseDate(product.published_at) ?? null,
       seo: null,
       metaTags: null,
@@ -256,6 +307,7 @@ export function mapProductDto(
     product.price,
     product.compare_at_price || 0
   );
+  const variantImages = buildVariantImagesMap(product, ctx);
 
   if (isMinimal) {
     return {
@@ -270,6 +322,7 @@ export function mapProductDto(
           }))
         : [],
       featuredImage: ctx.normalizeImageUrl(product.featured_image),
+      variantImages,
       available: product.available,
       localizedPricing: {
         priceFormatted: ctx.formatPrice(product.price),
@@ -347,6 +400,7 @@ export function mapProductDto(
           updatedAt: product.updated_at,
         }))
       : [],
+    variantImages,
     publishedAt: safeParseDate(product.published_at) ?? null,
     seo: null,
     metaTags: null,

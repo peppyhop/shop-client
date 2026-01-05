@@ -419,6 +419,7 @@ export type Product = {
   updatedAt?: Date;
   variants: ProductVariant[] | null;
   images: ProductImage[];
+  variantImages: Record<string, string[]>;
   publishedAt: Date | null;
   seo?: MetaTag[] | null;
   metaTags?: MetaTag[] | null;
@@ -445,6 +446,7 @@ export type MinimalProduct = {
   discount: number;
   images: { src: string }[];
   featuredImage: string | null;
+  variantImages: Record<string, string[]>;
   available: boolean;
   localizedPricing: Pick<
     LocalizedPricing,
