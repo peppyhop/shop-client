@@ -4,6 +4,9 @@ import type {
   Collection,
   CurrencyCode,
   ProductColumnsConfig,
+  ProductColumnsMode,
+  ProductImagesMode,
+  ProductOptionsMode,
   ProductResult,
   ShopifyCollection,
 } from "./types";
@@ -50,23 +53,34 @@ export interface CollectionOperations {
     /**
      * Fetches products from a specific collection with pagination support.
      */
-    paginated(
+    paginated<
+      C extends ProductColumnsMode = "minimal",
+      I extends ProductImagesMode = "minimal",
+      O extends ProductOptionsMode = "minimal",
+    >(
       collectionHandle: string,
       options?: {
         page?: number;
         limit?: number;
         currency?: CurrencyCode;
-        columns?: ProductColumnsConfig;
+        columns?: ProductColumnsConfig<C, I, O>;
       }
-    ): Promise<ProductResult[] | null>;
+    ): Promise<ProductResult<C, I, O>[] | null>;
 
     /**
      * Fetches all products from a specific collection.
      */
-    all(
+    all<
+      C extends ProductColumnsMode = "minimal",
+      I extends ProductImagesMode = "minimal",
+      O extends ProductOptionsMode = "minimal",
+    >(
       collectionHandle: string,
-      options?: { currency?: CurrencyCode; columns?: ProductColumnsConfig }
-    ): Promise<ProductResult[] | null>;
+      options?: {
+        currency?: CurrencyCode;
+        columns?: ProductColumnsConfig<C, I, O>;
+      }
+    ): Promise<ProductResult<C, I, O>[] | null>;
     /**
      * Fetches all product slugs from a specific collection.
      */
@@ -85,10 +99,18 @@ export function createCollectionOperations(
     limit: number
   ) => Promise<Collection[] | null>,
   collectionsDto: (collections: ShopifyCollection[]) => Collection[],
-  fetchPaginatedProductsFromCollection: (
+  fetchPaginatedProductsFromCollection: <
+    C extends ProductColumnsMode = "minimal",
+    I extends ProductImagesMode = "minimal",
+    O extends ProductOptionsMode = "minimal",
+  >(
     collectionHandle: string,
-    options?: { page?: number; limit?: number; columns?: ProductColumnsConfig }
-  ) => Promise<ProductResult[] | null>,
+    options?: {
+      page?: number;
+      limit?: number;
+      columns?: ProductColumnsConfig<C, I, O>;
+    }
+  ) => Promise<ProductResult<C, I, O>[] | null>,
   getStoreInfo: () => Promise<ShopInfo>,
   findCollection: (handle: string) => Promise<Collection | null>
 ): CollectionOperations {
@@ -106,20 +128,18 @@ export function createCollectionOperations(
     findCache.set(key, { ts: Date.now(), value });
   };
 
-  function applyCurrencyOverride(
-    product: ProductResult,
+  function applyCurrencyOverride<
+    C extends ProductColumnsMode,
+    I extends ProductImagesMode,
+    O extends ProductOptionsMode,
+  >(
+    product: ProductResult<C, I, O>,
     currency: CurrencyCode
-  ): ProductResult {
+  ): ProductResult<C, I, O> {
     if ("priceMin" in product) {
-      const p = product as any;
-      const priceMin =
-        typeof p.priceMin === "number" ? p.priceMin : (p.price ?? 0);
-      const priceMax =
-        typeof p.priceMax === "number" ? p.priceMax : (p.price ?? 0);
-      const compareAtMin =
-        typeof p.compareAtPriceMin === "number"
-          ? p.compareAtPriceMin
-          : (p.compareAtPrice ?? 0);
+      const priceMin = product.priceMin;
+      const priceMax = product.priceMax;
+      const compareAtMin = product.compareAtPriceMin;
       return {
         ...product,
         currency,
@@ -130,23 +150,26 @@ export function createCollectionOperations(
           priceMaxFormatted: formatPrice(priceMax, currency),
           compareAtPriceFormatted: formatPrice(compareAtMin, currency),
         },
-      } as ProductResult;
+      } as ProductResult<C, I, O>;
     }
 
-    const compareAtPrice = (product as any).compareAtPrice ?? 0;
     return {
       ...product,
       localizedPricing: {
-        priceFormatted: formatPrice((product as any).price ?? 0, currency),
-        compareAtPriceFormatted: formatPrice(compareAtPrice, currency),
+        priceFormatted: formatPrice(product.price, currency),
+        compareAtPriceFormatted: formatPrice(product.compareAtPrice, currency),
       },
-    } as ProductResult;
+    } as ProductResult<C, I, O>;
   }
 
-  function maybeOverrideProductsCurrency(
-    products: ProductResult[] | null,
+  function maybeOverrideProductsCurrency<
+    C extends ProductColumnsMode,
+    I extends ProductImagesMode,
+    O extends ProductOptionsMode,
+  >(
+    products: ProductResult<C, I, O>[] | null,
     currency?: CurrencyCode
-  ): ProductResult[] | null {
+  ): ProductResult<C, I, O>[] | null {
     if (!products || !currency || products.length === 0) return products;
     return products.map((p) => applyCurrencyOverride(p, currency));
   }
@@ -442,15 +465,19 @@ export function createCollectionOperations(
        * );
        * ```
        */
-      paginated: async (
+      paginated: async <
+        C extends ProductColumnsMode = "minimal",
+        I extends ProductImagesMode = "minimal",
+        O extends ProductOptionsMode = "minimal",
+      >(
         collectionHandle: string,
         options?: {
           page?: number;
           limit?: number;
           currency?: CurrencyCode;
-          columns?: ProductColumnsConfig;
+          columns?: ProductColumnsConfig<C, I, O>;
         }
-      ) => {
+      ): Promise<ProductResult<C, I, O>[] | null> => {
         // Validate collection handle
         if (!collectionHandle || typeof collectionHandle !== "string") {
           throw new Error("Collection handle is required and must be a string");
@@ -512,10 +539,17 @@ export function createCollectionOperations(
        * }
        * ```
        */
-      all: async (
+      all: async <
+        C extends ProductColumnsMode = "minimal",
+        I extends ProductImagesMode = "minimal",
+        O extends ProductOptionsMode = "minimal",
+      >(
         collectionHandle: string,
-        options?: { currency?: CurrencyCode; columns?: ProductColumnsConfig }
-      ): Promise<ProductResult[] | null> => {
+        options?: {
+          currency?: CurrencyCode;
+          columns?: ProductColumnsConfig<C, I, O>;
+        }
+      ): Promise<ProductResult<C, I, O>[] | null> => {
         // Validate collection handle
         if (!collectionHandle || typeof collectionHandle !== "string") {
           throw new Error("Collection handle is required and must be a string");
@@ -536,7 +570,7 @@ export function createCollectionOperations(
 
         try {
           const limit = 250;
-          const allProducts: ProductResult[] = [];
+          const allProducts: ProductResult<C, I, O>[] = [];
 
           let currentPage = 1;
 

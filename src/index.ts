@@ -15,6 +15,9 @@ import type {
   CollectionColumnsConfig,
   OpenRouterConfig,
   ProductColumnsConfig,
+  ProductColumnsMode,
+  ProductImagesMode,
+  ProductOptionsMode,
   ProductResult,
   ShopifyCollection,
   ShopifyProduct,
@@ -248,11 +251,15 @@ export class ShopClient {
   /**
    * Transform Shopify products to our Product format
    */
-  productsDto(
+  productsDto<
+    C extends ProductColumnsMode = "minimal",
+    I extends ProductImagesMode = "minimal",
+    O extends ProductOptionsMode = "minimal",
+  >(
     products: ShopifyProduct[],
-    options?: { columns?: ProductColumnsConfig }
-  ): ProductResult[] | null {
-    return mapProductsDto(
+    options?: { columns?: ProductColumnsConfig<C, I, O> }
+  ): ProductResult<C, I, O>[] | null {
+    return mapProductsDto<C, I, O>(
       products,
       {
         storeDomain: this.storeDomain,
@@ -261,15 +268,23 @@ export class ShopClient {
         normalizeImageUrl: (url) => this.normalizeImageUrl(url),
         formatPrice: (amount) => this.formatPrice(amount),
       },
-      { columns: options?.columns ?? this.productColumns }
+      {
+        columns:
+          options?.columns ??
+          (this.productColumns as unknown as ProductColumnsConfig<C, I, O>),
+      }
     );
   }
 
-  productDto(
+  productDto<
+    C extends ProductColumnsMode = "minimal",
+    I extends ProductImagesMode = "minimal",
+    O extends ProductOptionsMode = "minimal",
+  >(
     product: ShopifySingleProduct,
-    options?: { columns?: ProductColumnsConfig }
-  ): ProductResult {
-    return mapProductDto(
+    options?: { columns?: ProductColumnsConfig<C, I, O> }
+  ): ProductResult<C, I, O> {
+    return mapProductDto<C, I, O>(
       product,
       {
         storeDomain: this.storeDomain,
@@ -278,7 +293,11 @@ export class ShopClient {
         normalizeImageUrl: (url) => this.normalizeImageUrl(url),
         formatPrice: (amount) => this.formatPrice(amount),
       },
-      { columns: options?.columns ?? this.productColumns }
+      {
+        columns:
+          options?.columns ??
+          (this.productColumns as unknown as ProductColumnsConfig<C, I, O>),
+      }
     );
   }
 
@@ -346,11 +365,15 @@ export class ShopClient {
   /**
    * Fetch products with pagination
    */
-  private async fetchProducts(
+  private async fetchProducts<
+    C extends ProductColumnsMode = "minimal",
+    I extends ProductImagesMode = "minimal",
+    O extends ProductOptionsMode = "minimal",
+  >(
     page: number,
     limit: number,
-    options?: { columns?: ProductColumnsConfig }
-  ): Promise<ProductResult[] | null> {
+    options?: { columns?: ProductColumnsConfig<C, I, O> }
+  ): Promise<ProductResult<C, I, O>[] | null> {
     try {
       const url = `${this.baseUrl}products.json?page=${page}&limit=${limit}`;
       const response = await rateLimitedFetch(url, {
@@ -362,8 +385,10 @@ export class ShopClient {
       }
 
       const data: { products: ShopifyProduct[] } = await response.json();
-      return this.productsDto(data.products, {
-        columns: options?.columns ?? this.productColumns,
+      return this.productsDto<C, I, O>(data.products, {
+        columns:
+          options?.columns ??
+          (this.productColumns as unknown as ProductColumnsConfig<C, I, O>),
       });
     } catch (error) {
       this.handleFetchError(
@@ -402,14 +427,18 @@ export class ShopClient {
   /**
    * Fetch paginated products from a specific collection
    */
-  private async fetchPaginatedProductsFromCollection(
+  private async fetchPaginatedProductsFromCollection<
+    C extends ProductColumnsMode = "minimal",
+    I extends ProductImagesMode = "minimal",
+    O extends ProductOptionsMode = "minimal",
+  >(
     collectionHandle: string,
     options: {
       page?: number;
       limit?: number;
-      columns?: ProductColumnsConfig;
+      columns?: ProductColumnsConfig<C, I, O>;
     } = {}
-  ): Promise<ProductResult[] | null> {
+  ): Promise<ProductResult<C, I, O>[] | null> {
     try {
       const { page = 1, limit = 250 } = options;
       // Resolve canonical collection handle via HTML redirect if handle has changed
@@ -448,8 +477,10 @@ export class ShopClient {
       }
 
       const data: { products: ShopifyProduct[] } = await response.json();
-      return this.productsDto(data.products, {
-        columns: options?.columns ?? this.productColumns,
+      return this.productsDto<C, I, O>(data.products, {
+        columns:
+          options?.columns ??
+          (this.productColumns as unknown as ProductColumnsConfig<C, I, O>),
       });
     } catch (error) {
       this.handleFetchError(

@@ -359,7 +359,7 @@ Fetches all products from the store with automatic pagination handling.
 const allProducts = await shop.products.all();
 ```
 
-**Returns:** `ProductResult[] | null`
+**Returns:** `ProductResult[] | null` (typed based on `columns`, defaults to minimal)
 
 #### `products.paginated(options)`
 
@@ -379,7 +379,7 @@ const products = await shop.products.paginated({
 - `limit` (number, optional): Products per page (default: 250, max: 250)
  - `currency` (CurrencyCode, optional): ISO 4217 code aligned with `Intl.NumberFormatOptions['currency']` (e.g., `"USD"`, `"EUR"`, `"JPY"`)
 
-**Returns:** `ProductResult[] | null`
+**Returns:** `ProductResult[] | null` (typed based on `columns`, defaults to minimal)
 
 #### `products.find(handle)`
 
@@ -397,7 +397,26 @@ const productEur = await shop.products.find("product-handle", { currency: "EUR" 
  - `options` (object, optional): Additional options
    - `currency` (CurrencyCode, optional): ISO 4217 code aligned with `Intl.NumberFormatOptions['currency']`
 
-**Returns:** `ProductResult | null`
+**Returns:** `ProductResult | null` (typed based on `columns`, defaults to minimal)
+
+#### `products.findEnhanced(handle, options)`
+
+Finds a product by handle and returns the product plus AI enrichment from the worker endpoint. The `product` field is typed the same way as `products.find()` based on `columns`.
+
+```typescript
+const enhanced = await shop.products.findEnhanced("product-handle", {
+  apiKey: process.env.ENRICH_API_KEY!,
+  columns: { mode: "full", images: "full", options: "full" },
+});
+
+if (enhanced) {
+  console.log(enhanced.cache); // e.g. "hit" | "miss"
+  console.log(enhanced.enrichment.markdown);
+  console.log(enhanced.product.handle); // available when mode: "full"
+}
+```
+
+**Returns:** `EnhancedProductResponse<ProductResult> | null` (typed based on `columns`)
 
 #### `products.showcased()`
 
@@ -475,7 +494,7 @@ const results = await shop.products.predictiveSearch("dress", {
 - Extracts handles from Ajax results, fetches full products via `find`
 - Falls back to non-locale path when locale returns 404/417
 
-**Returns:** `ProductResult[]`
+**Returns:** `ProductResult[]` (typed based on `columns`, defaults to minimal)
 
 ### Recommendations
 
@@ -497,7 +516,7 @@ const recos = await shop.products.recommendations(1234567890, {
 
 ### Product Columns
 
-Default product payload is minimal. Use `columns` to override the product payload shape (full vs minimal):
+Default product payload is minimal. Use `columns` to override the product payload shape, and TypeScript will reflect the shape in the returned type:
 
 ```typescript
 // Minimal products (default)
@@ -513,6 +532,11 @@ const minimalOne = await shop.products.find("product-handle", {
   columns: { mode: "minimal", images: "minimal", options: "minimal" },
 });
 ```
+
+Quick mental model:
+- `mode: "minimal"` returns a minimal product shape (no `handle`, no `priceMin/priceMax`, no `currency` field)
+- `mode: "full"` returns a full product shape (includes `handle`, pricing range fields, `currency`, variants, etc.)
+- `images: "full"` and `options: "full"` expand those subfields while keeping the chosen `mode`
 
 ### Collections
 
@@ -579,7 +603,7 @@ const products = await shop.collections.products.all("collection-handle");
 **Parameters:**
 - `handle` (string): The collection handle
 
-**Returns:** `ProductResult[] | null`
+**Returns:** `ProductResult[] | null` (typed based on `columns`, defaults to minimal)
 
 #### `collections.products.paginated(handle, options)`
 
@@ -600,7 +624,7 @@ const products = await shop.collections.products.paginated("collection-handle", 
   - `limit` (number, optional): Products per page (default: 250)
   - `currency` (CurrencyCode, optional): ISO 4217 code aligned with `Intl.NumberFormatOptions['currency']`
 
-**Returns:** `ProductResult[] | null`
+**Returns:** `ProductResult[] | null` (typed based on `columns`, defaults to minimal)
 
 Collection products also default to minimal. To request full products from collections, pass `columns`:
 
@@ -616,6 +640,7 @@ By default, pricing is formatted using the store’s detected currency.
 You can override the currency for product and collection queries by passing a `currency` option.
 This override updates pricing display fields only:
 - `ProductResult.localizedPricing` formatted strings
+ - For full products (`mode: "full"`), `ProductResult.currency` is also set to the override
 
 ### Showcased Products
 
