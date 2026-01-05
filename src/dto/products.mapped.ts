@@ -2,6 +2,9 @@ import type {
   MinimalProduct,
   Product,
   ProductColumnsConfig,
+  ProductColumnsMode,
+  ProductImagesMode,
+  ProductOptionsMode,
   ProductResult,
   ShopifyProduct,
   ShopifyProductVariant,
@@ -24,13 +27,17 @@ type Ctx = {
   formatPrice: (amountInCents: number) => string;
 };
 
-function resolveColumnsConfig(
-  columns: ProductColumnsConfig | undefined
-): Required<ProductColumnsConfig> {
+function resolveColumnsConfig<
+  C extends ProductColumnsMode,
+  I extends ProductImagesMode,
+  O extends ProductOptionsMode,
+>(
+  columns: ProductColumnsConfig<C, I, O> | undefined
+): Required<ProductColumnsConfig<C, I, O>> {
   return {
-    mode: columns?.mode ?? "minimal",
-    images: columns?.images ?? "minimal",
-    options: columns?.options ?? "minimal",
+    mode: (columns?.mode ?? "minimal") as C,
+    images: (columns?.images ?? "minimal") as I,
+    options: (columns?.options ?? "minimal") as O,
   };
 }
 
@@ -147,14 +154,18 @@ function buildVariantImagesMap(
   return out;
 }
 
-export function mapProductsDto(
+export function mapProductsDto<
+  C extends ProductColumnsMode = "minimal",
+  I extends ProductImagesMode = "minimal",
+  O extends ProductOptionsMode = "minimal",
+>(
   products: ShopifyProduct[] | null,
   ctx: Ctx,
-  options?: { columns?: ProductColumnsConfig }
-): ProductResult[] | null {
+  options?: { columns?: ProductColumnsConfig<C, I, O> }
+): ProductResult<C, I, O>[] | null {
   if (!products || products.length === 0) return null;
 
-  const columns = resolveColumnsConfig(options?.columns);
+  const columns = resolveColumnsConfig<C, I, O>(options?.columns);
 
   const mapOne = (product: ShopifyProduct) => {
     const optionNames = product.options.map((o) => o.name);
@@ -252,7 +263,7 @@ export function mapProductsDto(
         ...minimalBase,
         images,
         options: mappedOptions,
-      } as ProductResult;
+      } as ProductResult<C, I, O>;
     }
 
     const fullBase: Omit<Product, "images" | "options"> = {
@@ -307,18 +318,22 @@ export function mapProductsDto(
       ...fullBase,
       images,
       options: mappedOptions,
-    } as ProductResult;
+    } as ProductResult<C, I, O>;
   };
 
-  return products.map(mapOne) as ProductResult[];
+  return products.map(mapOne) as ProductResult<C, I, O>[];
 }
 
-export function mapProductDto(
+export function mapProductDto<
+  C extends ProductColumnsMode = "minimal",
+  I extends ProductImagesMode = "minimal",
+  O extends ProductOptionsMode = "minimal",
+>(
   product: ShopifySingleProduct,
   ctx: Ctx,
-  options?: { columns?: ProductColumnsConfig }
-): ProductResult {
-  const columns = resolveColumnsConfig(options?.columns);
+  options?: { columns?: ProductColumnsConfig<C, I, O> }
+): ProductResult<C, I, O> {
+  const columns = resolveColumnsConfig<C, I, O>(options?.columns);
   const optionNames = product.options.map((o) => o.name);
   const variantOptionsMap = buildVariantOptionsMap(
     optionNames,
@@ -397,7 +412,7 @@ export function mapProductDto(
       ...minimalBase,
       images,
       options: mappedOptions,
-    } as ProductResult;
+    } as ProductResult<C, I, O>;
   }
 
   const fullBase: Omit<Product, "images" | "options"> = {
@@ -456,5 +471,5 @@ export function mapProductDto(
     ...fullBase,
     images,
     options: mappedOptions,
-  } as ProductResult;
+  } as ProductResult<C, I, O>;
 }
