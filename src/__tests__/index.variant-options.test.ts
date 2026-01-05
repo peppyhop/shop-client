@@ -1,10 +1,10 @@
 import { ShopClient } from "../index";
 import type {
-  ShopifyImage,
-  ShopifyProduct,
-  ShopifyProductVariant,
-  ShopifySingleProduct,
-  ShopifySingleProductVariant,
+    ShopifyImage,
+    ShopifyProduct,
+    ShopifyProductVariant,
+    ShopifySingleProduct,
+    ShopifySingleProductVariant,
 } from "../types";
 
 describe("variantOptionsMap in product DTOs", () => {
@@ -66,7 +66,7 @@ describe("variantOptionsMap in product DTOs", () => {
       src: "https://example.com/img.jpg",
       position: 1,
       product_id: 1,
-      variant_ids: [],
+      variant_ids: ["1"],
     };
 
     const product: ShopifyProduct = {
@@ -97,6 +97,9 @@ describe("variantOptionsMap in product DTOs", () => {
       "color#blue##size#xl": "1",
       "color#red##size#xl": "2",
     });
+    expect(mapped.variantImages).toEqual({
+      "1": ["https://example.com/img.jpg"],
+    });
   });
 
   test("productDto includes variantOptionsMap with three options when present", () => {
@@ -117,7 +120,21 @@ describe("variantOptionsMap in product DTOs", () => {
         taxable: true,
         position: 1,
         product_id: 99,
-        featured_image: null,
+        featured_image: {
+          id: 10,
+          title: "variant",
+          handle: "variant",
+          src: "https://example.com/variant.jpg",
+          width: 0,
+          height: 0,
+          aspect_ratio: 1,
+          position: 1,
+          product_id: 99,
+          variant_ids: [101],
+          created_at: "2020-01-01T00:00:00Z",
+          updated_at: "2020-01-01T00:00:00Z",
+          alt: null,
+        },
         featured_media: null,
         available: true,
         price: "100",
@@ -172,6 +189,9 @@ describe("variantOptionsMap in product DTOs", () => {
     const mapped = shop.productDto(product);
     expect(mapped.variantOptionsMap).toEqual({
       "color#blue##material#cotton##size#m": "101",
+    });
+    expect(mapped.variantImages).toEqual({
+      "101": ["https://example.com/variant.jpg"],
     });
   });
 });
