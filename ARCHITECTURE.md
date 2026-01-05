@@ -39,7 +39,7 @@ The `shop-client` library is a TypeScript-based SDK designed to interact with Sh
 │  │ • find()        │ │ • showcased()   │ │                 ││
 │  │ • showcased()   │ │ • products.*    │ │                 ││
 │  │ • filter()      │ │                 │ │                 ││
-│  │ • showcase.minimal() │ │                 │ │                 ││
+│  │ • columns config    │ │                 │ │                 ││
 │  └─────────────────┘ └─────────────────┘ └─────────────────┘│
 │                                                             │
 │  ┌─────────────────────────────────────────────────────────┐│

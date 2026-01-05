@@ -359,7 +359,7 @@ Fetches all products from the store with automatic pagination handling.
 const allProducts = await shop.products.all();
 ```
 
-**Returns:** `Product[] | null`
+**Returns:** `ProductResult[] | null`
 
 #### `products.paginated(options)`
 
@@ -379,7 +379,7 @@ const products = await shop.products.paginated({
 - `limit` (number, optional): Products per page (default: 250, max: 250)
  - `currency` (CurrencyCode, optional): ISO 4217 code aligned with `Intl.NumberFormatOptions['currency']` (e.g., `"USD"`, `"EUR"`, `"JPY"`)
 
-**Returns:** `Product[] | null`
+**Returns:** `ProductResult[] | null`
 
 #### `products.find(handle)`
 
@@ -397,7 +397,7 @@ const productEur = await shop.products.find("product-handle", { currency: "EUR" 
  - `options` (object, optional): Additional options
    - `currency` (CurrencyCode, optional): ISO 4217 code aligned with `Intl.NumberFormatOptions['currency']`
 
-**Returns:** `Product | null`
+**Returns:** `ProductResult | null`
 
 #### `products.showcased()`
 
@@ -407,7 +407,7 @@ Fetches products featured on the store's homepage.
 const showcasedProducts = await shop.products.showcased();
 ```
 
-**Returns:** `Product[]`
+**Returns:** `ProductResult[]`
 
 #### `products.infoHtml(productHandle, content?)`
 
@@ -475,7 +475,7 @@ const results = await shop.products.predictiveSearch("dress", {
 - Extracts handles from Ajax results, fetches full products via `find`
 - Falls back to non-locale path when locale returns 404/417
 
-**Returns:** `Product[]`
+**Returns:** `ProductResult[]`
 
 ### Recommendations
 
@@ -492,31 +492,26 @@ const recos = await shop.products.recommendations(1234567890, {
 });
 ```
 
-- Returns normalized `Product[]`
+- Returns normalized `ProductResult[]`
 - Locale-aware endpoint `/{locale}/recommendations/products.json`
 
-### Minimal Products
+### Product Columns
 
-Convenience methods for minimal product returns:
+Default product payload is minimal. Use `columns` to override the product payload shape (full vs minimal):
 
 ```typescript
-// All products (minimal)
-const minimalAll = await shop.products.minimal.all();
+// Minimal products (default)
+const minimal = await shop.products.all();
 
-// Paginated (minimal)
-const minimalPage = await shop.products.minimal.paginated({ page: 1, limit: 25 });
+// Full products
+const full = await shop.products.all({
+  columns: { mode: "full", images: "full", options: "full" },
+});
 
-// Find one (minimal)
-const minimalOne = await shop.products.minimal.find("product-handle");
-
-// Showcased (minimal)
-const minimalShowcased = await shop.products.showcase.minimal();
-
-// Predictive search (minimal)
-const minimalSearch = await shop.products.minimal.predictiveSearch("dress", { limit: 10 });
-
-// Recommendations (minimal)
-const minimalRecos = await shop.products.minimal.recommendations(1234567890, { limit: 6 });
+// Minimal single product
+const minimalOne = await shop.products.find("product-handle", {
+  columns: { mode: "minimal", images: "minimal", options: "minimal" },
+});
 ```
 
 ### Collections
@@ -584,7 +579,7 @@ const products = await shop.collections.products.all("collection-handle");
 **Parameters:**
 - `handle` (string): The collection handle
 
-**Returns:** `Product[] | null`
+**Returns:** `ProductResult[] | null`
 
 #### `collections.products.paginated(handle, options)`
 
@@ -605,20 +600,13 @@ const products = await shop.collections.products.paginated("collection-handle", 
   - `limit` (number, optional): Products per page (default: 250)
   - `currency` (CurrencyCode, optional): ISO 4217 code aligned with `Intl.NumberFormatOptions['currency']`
 
-**Returns:** `Product[] | null`
+**Returns:** `ProductResult[] | null`
 
-#### `collections.products.minimal.*`
-
-Convenience methods for minimal product returns from collections:
+Collection products also default to minimal. To request full products from collections, pass `columns`:
 
 ```typescript
-// All products (minimal)
-const minimalCollectionAll = await shop.collections.products.minimal.all("collection-handle");
-
-// Paginated (minimal)
-const minimalCollectionPage = await shop.collections.products.minimal.paginated("collection-handle", {
-  page: 1,
-  limit: 25,
+const fullCollectionAll = await shop.collections.products.all("collection-handle", {
+  columns: { mode: "full", images: "full", options: "full" },
 });
 ```
 
@@ -626,31 +614,25 @@ const minimalCollectionPage = await shop.collections.products.minimal.paginated(
 
 By default, pricing is formatted using the store’s detected currency.
 You can override the currency for product and collection queries by passing a `currency` option.
-This override updates product pricing display fields only:
-- `Product.localizedPricing` formatted strings
-- `MinimalProduct.localizedPricing` formatted strings
+This override updates pricing display fields only:
+- `ProductResult.localizedPricing` formatted strings
 
 ### Showcased Products
 
 #### `products.showcased()`
 
-Fetches products showcased on the store’s homepage as full products.
+Fetches products showcased on the store’s homepage (shape controlled by `columns`).
 
 ```typescript
-const featuredProducts = await shop.products.showcased();
+// Minimal showcased products (default)
+const minimalFeatured = await shop.products.showcased();
+
+const featuredProducts = await shop.products.showcased({
+  columns: { mode: "full", images: "full", options: "full" },
+});
 ```
 
-**Returns:** `Product[]`
-
-#### `products.showcase.minimal()`
-
-Fetches showcased products as minimal product items.
-
-```typescript
-const minimalFeatured = await shop.products.showcase.minimal();
-```
-
-**Returns:** `MinimalProduct[]`
+**Returns:** `ProductResult[]`
 
 ```typescript
 // Products

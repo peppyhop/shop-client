@@ -1,6 +1,8 @@
 import type {
   MinimalProduct,
   Product,
+  ProductColumnsConfig,
+  ProductResult,
   ShopifyProduct,
   ShopifyProductVariant,
   ShopifySingleProduct,
@@ -21,6 +23,16 @@ type Ctx = {
   normalizeImageUrl: (url: string | null | undefined) => string;
   formatPrice: (amountInCents: number) => string;
 };
+
+function resolveColumnsConfig(
+  columns: ProductColumnsConfig | undefined
+): Required<ProductColumnsConfig> {
+  return {
+    mode: columns?.mode ?? "minimal",
+    images: columns?.images ?? "minimal",
+    options: columns?.options ?? "minimal",
+  };
+}
 
 function mapVariants(
   product: ShopifyProduct | ShopifySingleProduct
@@ -138,11 +150,11 @@ function buildVariantImagesMap(
 export function mapProductsDto(
   products: ShopifyProduct[] | null,
   ctx: Ctx,
-  options?: { minimal?: boolean }
-): Product[] | MinimalProduct[] | null {
+  options?: { columns?: ProductColumnsConfig }
+): ProductResult[] | null {
   if (!products || products.length === 0) return null;
 
-  const isMinimal = options?.minimal ?? true;
+  const columns = resolveColumnsConfig(options?.columns);
 
   const mapOne = (product: ShopifyProduct) => {
     const optionNames = product.options.map((o) => o.name);
@@ -180,39 +192,70 @@ export function mapProductsDto(
     const discount = calculateDiscount(priceMin, compareAtMin);
     const variantImages = buildVariantImagesMap(product, ctx);
 
-    if (isMinimal) {
-      const minimal: MinimalProduct = {
+    const imagesMinimal = product.images.map((img) => ({
+      src: ctx.normalizeImageUrl(img.src),
+    }));
+    const imagesFull = product.images.map((image) => ({
+      id: image.id,
+      productId: image.product_id,
+      alt: null,
+      position: image.position,
+      src: ctx.normalizeImageUrl(image.src),
+      width: image.width,
+      height: image.height,
+      mediaType: "image" as const,
+      variantIds: image.variant_ids || [],
+      createdAt: image.created_at,
+      updatedAt: image.updated_at,
+    }));
+    const images = columns.images === "full" ? imagesFull : imagesMinimal;
+
+    const optionsMinimal = product.options.map((option) => ({
+      key: normalizeKey(option.name),
+      name: option.name,
+      values: option.values,
+    }));
+    const optionsFull = product.options.map((option) => ({
+      key: normalizeKey(option.name),
+      data: option.values,
+      name: option.name,
+      position: option.position,
+      values: option.values,
+    }));
+    const mappedOptions =
+      columns.options === "full" ? optionsFull : optionsMinimal;
+
+    const featuredImage = product.images?.[0]?.src
+      ? ctx.normalizeImageUrl(product.images[0].src)
+      : null;
+
+    if (columns.mode === "minimal") {
+      const minimalBase: Omit<MinimalProduct, "images" | "options"> = {
         title: product.title,
         bodyHtml: product.body_html || null,
         price: priceMin,
         compareAtPrice: compareAtMin,
         discount,
-        images: product.images.map((img) => ({
-          src: ctx.normalizeImageUrl(img.src),
-        })),
-        featuredImage: product.images?.[0]?.src
-          ? ctx.normalizeImageUrl(product.images[0].src)
-          : null,
+        featuredImage,
         variantImages,
         available: mappedVariants.some((v) => v.available),
         localizedPricing: {
           priceFormatted: ctx.formatPrice(priceMin),
           compareAtPriceFormatted: ctx.formatPrice(compareAtMin),
         },
-        options: product.options.map((option) => ({
-          key: normalizeKey(option.name),
-          name: option.name,
-          values: option.values,
-        })),
         variantOptionsMap,
         url,
         slug,
         platformId: product.id.toString(),
       };
-      return minimal;
+      return {
+        ...minimalBase,
+        images,
+        options: mappedOptions,
+      } as ProductResult;
     }
 
-    const full: Product = {
+    const fullBase: Omit<Product, "images" | "options"> = {
       slug,
       handle: product.handle,
       platformId: product.id.toString(),
@@ -235,39 +278,17 @@ export function mapProductsDto(
         priceMaxFormatted: ctx.formatPrice(priceMax),
         compareAtPriceFormatted: ctx.formatPrice(compareAtMin),
       },
-      options: product.options.map((option) => ({
-        key: normalizeKey(option.name),
-        data: option.values,
-        name: option.name,
-        position: option.position,
-        values: option.values,
-      })),
       variantOptionsMap,
       bodyHtml: product.body_html || null,
       active: true,
       productType: product.product_type || null,
       tags: Array.isArray(product.tags) ? product.tags : [],
       vendor: product.vendor,
-      featuredImage: product.images?.[0]?.src
-        ? ctx.normalizeImageUrl(product.images[0].src)
-        : null,
+      featuredImage,
       isProxyFeaturedImage: false,
       createdAt: safeParseDate(product.created_at),
       updatedAt: safeParseDate(product.updated_at),
       variants: mappedVariants,
-      images: product.images.map((image) => ({
-        id: image.id,
-        productId: image.product_id,
-        alt: null,
-        position: image.position,
-        src: ctx.normalizeImageUrl(image.src),
-        width: image.width,
-        height: image.height,
-        mediaType: "image" as const,
-        variantIds: image.variant_ids || [],
-        createdAt: image.created_at,
-        updatedAt: image.updated_at,
-      })),
       variantImages,
       publishedAt: safeParseDate(product.published_at) ?? null,
       seo: null,
@@ -277,21 +298,27 @@ export function mapProductsDto(
       storeSlug: ctx.storeSlug,
       storeDomain: ctx.storeDomain,
       url,
+      embedding: undefined,
+      requiresSellingPlan: undefined,
+      sellingPlanGroups: undefined,
+      enriched_content: undefined,
     };
-    return full;
+    return {
+      ...fullBase,
+      images,
+      options: mappedOptions,
+    } as ProductResult;
   };
 
-  return isMinimal
-    ? (products.map(mapOne) as MinimalProduct[])
-    : (products.map(mapOne) as Product[]);
+  return products.map(mapOne) as ProductResult[];
 }
 
 export function mapProductDto(
   product: ShopifySingleProduct,
   ctx: Ctx,
-  options?: { minimal?: boolean }
-): Product | MinimalProduct {
-  const isMinimal = options?.minimal ?? true;
+  options?: { columns?: ProductColumnsConfig }
+): ProductResult {
+  const columns = resolveColumnsConfig(options?.columns);
   const optionNames = product.options.map((o) => o.name);
   const variantOptionsMap = buildVariantOptionsMap(
     optionNames,
@@ -309,38 +336,71 @@ export function mapProductDto(
   );
   const variantImages = buildVariantImagesMap(product, ctx);
 
-  if (isMinimal) {
-    return {
+  const imagesMinimal = Array.isArray(product.images)
+    ? product.images.map((imageSrc) => ({
+        src: ctx.normalizeImageUrl(imageSrc),
+      }))
+    : [];
+  const imagesFull = Array.isArray(product.images)
+    ? product.images.map((imageSrc, index) => ({
+        id: index + 1,
+        productId: product.id,
+        alt: null,
+        position: index + 1,
+        src: ctx.normalizeImageUrl(imageSrc),
+        width: 0,
+        height: 0,
+        mediaType: "image" as const,
+        variantIds: [],
+        createdAt: product.created_at,
+        updatedAt: product.updated_at,
+      }))
+    : [];
+  const images = columns.images === "full" ? imagesFull : imagesMinimal;
+
+  const optionsMinimal = product.options.map((option) => ({
+    key: normalizeKey(option.name),
+    name: option.name,
+    values: option.values,
+  }));
+  const optionsFull = product.options.map((option) => ({
+    key: normalizeKey(option.name),
+    data: option.values,
+    name: option.name,
+    position: option.position,
+    values: option.values,
+  }));
+  const mappedOptions =
+    columns.options === "full" ? optionsFull : optionsMinimal;
+
+  const featuredImage = ctx.normalizeImageUrl(product.featured_image);
+  if (columns.mode === "minimal") {
+    const minimalBase: Omit<MinimalProduct, "images" | "options"> = {
       title: product.title,
       bodyHtml: product.description || null,
       price: product.price,
       compareAtPrice: product.compare_at_price || 0,
       discount,
-      images: Array.isArray(product.images)
-        ? product.images.map((imageSrc) => ({
-            src: ctx.normalizeImageUrl(imageSrc),
-          }))
-        : [],
-      featuredImage: ctx.normalizeImageUrl(product.featured_image),
+      featuredImage,
       variantImages,
       available: product.available,
       localizedPricing: {
         priceFormatted: ctx.formatPrice(product.price),
         compareAtPriceFormatted: ctx.formatPrice(product.compare_at_price || 0),
       },
-      options: product.options.map((option) => ({
-        key: normalizeKey(option.name),
-        name: option.name,
-        values: option.values,
-      })),
       variantOptionsMap,
       url,
       slug,
       platformId: product.id.toString(),
-    } as MinimalProduct;
+    };
+    return {
+      ...minimalBase,
+      images,
+      options: mappedOptions,
+    } as ProductResult;
   }
 
-  const mapped: Product = {
+  const fullBase: Omit<Product, "images" | "options"> = {
     slug,
     handle: product.handle,
     platformId: product.id.toString(),
@@ -363,13 +423,6 @@ export function mapProductDto(
       priceMaxFormatted: ctx.formatPrice(product.price_max),
       compareAtPriceFormatted: ctx.formatPrice(product.compare_at_price || 0),
     },
-    options: product.options.map((option) => ({
-      key: normalizeKey(option.name),
-      data: option.values,
-      name: option.name,
-      position: option.position,
-      values: option.values,
-    })),
     variantOptionsMap,
     bodyHtml: product.description || null,
     active: true,
@@ -380,26 +433,11 @@ export function mapProductDto(
         ? [product.tags]
         : [],
     vendor: product.vendor,
-    featuredImage: ctx.normalizeImageUrl(product.featured_image),
+    featuredImage,
     isProxyFeaturedImage: false,
     createdAt: safeParseDate(product.created_at),
     updatedAt: safeParseDate(product.updated_at),
     variants: mapVariants(product),
-    images: Array.isArray(product.images)
-      ? product.images.map((imageSrc, index) => ({
-          id: index + 1,
-          productId: product.id,
-          alt: null,
-          position: index + 1,
-          src: ctx.normalizeImageUrl(imageSrc),
-          width: 0,
-          height: 0,
-          mediaType: "image" as const,
-          variantIds: [],
-          createdAt: product.created_at,
-          updatedAt: product.updated_at,
-        }))
-      : [],
     variantImages,
     publishedAt: safeParseDate(product.published_at) ?? null,
     seo: null,
@@ -409,7 +447,14 @@ export function mapProductDto(
     storeSlug: ctx.storeSlug,
     storeDomain: ctx.storeDomain,
     url,
+    embedding: undefined,
+    requiresSellingPlan: product.requires_selling_plan ?? null,
+    sellingPlanGroups: product.selling_plan_groups ?? undefined,
+    enriched_content: undefined,
   };
-
-  return mapped;
+  return {
+    ...fullBase,
+    images,
+    options: mappedOptions,
+  } as ProductResult;
 }

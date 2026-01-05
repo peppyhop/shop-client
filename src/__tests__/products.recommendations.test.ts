@@ -86,17 +86,22 @@ describe("products.recommendations", () => {
   test("returns normalized Product[] and applies store currency", async () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
-    const results = await shop.products.recommendations(1234567890, { limit: 2, intent: "related", locale: "en" });
+    const results = await shop.products.recommendations(1234567890, {
+      limit: 2,
+      intent: "related",
+      locale: "en",
+      columns: { mode: "full", images: "full", options: "full" },
+    });
     expect(results).toBeDefined();
     if (!results) return;
     expect(results.length).toBe(2);
     for (const p of results) {
-      expect(p.handle).toMatch(/^prod-/);
-      expect(p.currency).toBe("USD");
+      const prod = p as any;
+      expect(prod.handle).toMatch(/^prod-/);
+      expect(prod.currency).toBe("USD");
       expect(p.localizedPricing).toBeDefined();
       if (!p.localizedPricing) continue;
-      expect(p.localizedPricing.currency).toBe("USD");
+      expect((p.localizedPricing as any).currency).toBe("USD");
     }
   });
 });
-

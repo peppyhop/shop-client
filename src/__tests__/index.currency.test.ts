@@ -313,7 +313,9 @@ describe("Currency propagation and formatting", () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
 
-    const product = await shop.products.find("old-handle");
+    const product = await shop.products.find("old-handle", {
+      columns: { mode: "full", images: "full", options: "full" },
+    });
     expect(product).not.toBeNull();
     if (!product) return;
 
@@ -338,6 +340,7 @@ describe("Currency propagation and formatting", () => {
     const products = await shop.collections.products.paginated("old-collection", {
       page: 1,
       limit: 2,
+      columns: { mode: "full", images: "full", options: "full" },
     });
 
     expect(products).toBeDefined();
@@ -367,7 +370,10 @@ describe("Currency propagation and formatting", () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
 
-    const product = await shop.products.find("old-handle", { currency: "EUR" });
+    const product = await shop.products.find("old-handle", {
+      currency: "EUR",
+      columns: { mode: "full", images: "full", options: "full" },
+    });
     expect(product).not.toBeNull();
     if (!product) return;
 
@@ -393,6 +399,7 @@ describe("Currency propagation and formatting", () => {
       page: 1,
       limit: 2,
       currency: "JPY",
+      columns: { mode: "full", images: "full", options: "full" },
     });
 
     expect(products).toBeDefined();
@@ -422,7 +429,12 @@ describe("Currency propagation and formatting", () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
 
-    const products = await shop.products.paginated({ page: 1, limit: 2, currency: "GBP" });
+    const products = await shop.products.paginated({
+      page: 1,
+      limit: 2,
+      currency: "GBP",
+      columns: { mode: "full", images: "full", options: "full" },
+    });
     expect(products).toBeDefined();
     if (!products) return;
     expect(products.length).toBe(2);
@@ -440,7 +452,7 @@ describe("Currency propagation and formatting", () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
 
-    const product = await shop.products.minimal.find("old-handle", {
+    const product = await shop.products.find("old-handle", {
       currency: "EUR",
     });
     expect(product).not.toBeNull();
@@ -459,7 +471,7 @@ describe("Currency propagation and formatting", () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
 
-    const products = await shop.products.minimal.paginated({
+    const products = await shop.products.paginated({
       page: 1,
       limit: 2,
       currency: "GBP",
@@ -485,7 +497,7 @@ describe("Currency propagation and formatting", () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
 
-    const products = await shop.collections.products.minimal.paginated("old-collection", {
+    const products = await shop.collections.products.paginated("old-collection", {
       page: 1,
       limit: 2,
       currency: "JPY",

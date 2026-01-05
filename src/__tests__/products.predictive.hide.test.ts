@@ -140,10 +140,15 @@ describe("products.predictiveSearch hides unavailable and fetches via find", () 
   test("hides unavailable items and returns full products via find()", async () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
-    const results = await shop.products.predictiveSearch("dress", { limit: 10, locale: "en" });
+    const results = await shop.products.predictiveSearch("dress", {
+      limit: 10,
+      locale: "en",
+      columns: { mode: "full", images: "full", options: "full" },
+    });
     expect(results).toBeDefined();
     expect(results.length).toBe(1);
-    expect(results[0].handle).toBe("available-prod");
-    expect(results[0].currency).toBe("USD");
+    const first = results[0] as any;
+    expect(first.handle).toBe("available-prod");
+    expect(first.currency).toBe("USD");
   });
 });

@@ -1,6 +1,5 @@
 import type {
-  MinimalProduct,
-  Product,
+  ProductResult,
   ShopifyProduct,
   ShopifySingleProduct,
 } from "../types";
@@ -17,13 +16,13 @@ type Ctx = {
 export function productsDto(
   products: ShopifyProduct[] | null,
   ctx: Ctx
-): Product[] | MinimalProduct[] | null {
-  return mapProductsDto(products, ctx, { minimal: true });
+): ProductResult[] | null {
+  return mapProductsDto(products, ctx, { columns: { mode: "minimal" } });
 }
 
 export function productDto(
   product: ShopifySingleProduct,
   ctx: Ctx
-): Product | MinimalProduct {
-  return mapProductDto(product, ctx, { minimal: true });
+): ProductResult {
+  return mapProductDto(product, ctx, { columns: { mode: "minimal" } });
 }

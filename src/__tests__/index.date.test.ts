@@ -72,10 +72,13 @@ describe("Date sanitization in product mapping", () => {
       selling_plan_groups: undefined,
     };
 
-    const mapped = shop.productDto(product);
-    expect(mapped.createdAt).toBeUndefined();
-    expect(mapped.updatedAt).toBeUndefined();
-    expect(mapped.publishedAt).toBeNull();
+    const mapped = shop.productDto(product, {
+      columns: { mode: "full", images: "full", options: "full" },
+    });
+    const m = mapped as any;
+    expect(m.createdAt).toBeUndefined();
+    expect(m.updatedAt).toBeUndefined();
+    expect(m.publishedAt).toBeNull();
   });
 
   test("productsDto sanitizes invalid created/updated/published dates", () => {
@@ -134,9 +137,11 @@ describe("Date sanitization in product mapping", () => {
       images: [image],
     };
 
-    const mappedList = shop.productsDto([product]);
+    const mappedList = shop.productsDto([product], {
+      columns: { mode: "full", images: "full", options: "full" },
+    });
     expect(mappedList).not.toBeNull();
-    const mapped = mappedList![0];
+    const mapped = mappedList![0] as any;
     expect(mapped.createdAt).toBeUndefined();
     expect(mapped.updatedAt).toBeUndefined();
     expect(mapped.publishedAt).toBeNull();

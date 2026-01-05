@@ -459,6 +459,49 @@ export type MinimalProduct = {
   platformId: string;
 };
 
+export type ProductColumnsMode = "minimal" | "full";
+export type ProductImagesMode = "minimal" | "full";
+export type ProductOptionsMode = "minimal" | "full";
+
+export type ProductColumnsConfig<
+  C extends ProductColumnsMode = ProductColumnsMode,
+  I extends ProductImagesMode = ProductImagesMode,
+  O extends ProductOptionsMode = ProductOptionsMode,
+> = {
+  mode?: C;
+  images?: I;
+  options?: O;
+};
+
+export type ProductImagesByMode<I extends ProductImagesMode> = I extends "full"
+  ? ProductImage[]
+  : { src: string }[];
+
+export type ProductOptionsByMode<O extends ProductOptionsMode> =
+  O extends "full"
+    ? ProductOption[]
+    : { key: string; name: string; values: string[] }[];
+
+export type ProductResult<
+  C extends ProductColumnsMode = "minimal",
+  I extends ProductImagesMode = "minimal",
+  O extends ProductOptionsMode = "minimal",
+> = C extends "full"
+  ? Omit<Product, "images" | "options"> & {
+      images: ProductImagesByMode<I>;
+      options: ProductOptionsByMode<O>;
+    }
+  : Omit<MinimalProduct, "images" | "options"> & {
+      images: ProductImagesByMode<I>;
+      options: ProductOptionsByMode<O>;
+    };
+
+export type CollectionColumnsConfig<
+  K extends keyof Collection = keyof Collection,
+> = {
+  pick?: readonly K[];
+};
+
 /**
  * Alternative product structure for API responses with normalized field names.
  */

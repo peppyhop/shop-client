@@ -49,6 +49,16 @@ export interface ShopInfo {
   currency: CurrencyCode | null;
 }
 
+export type StoreInfoColumnsConfig<K extends keyof ShopInfo = keyof ShopInfo> =
+  {
+    pick?: readonly K[];
+  };
+
+export type StoreInfoResult<K extends keyof ShopInfo = keyof ShopInfo> = Pick<
+  ShopInfo,
+  K
+>;
+
 export interface OpenGraphMeta {
   siteName: string | null;
   title: string | null;

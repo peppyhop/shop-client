@@ -69,7 +69,9 @@ async function advancedUsageExample() {
     console.log("\n🛍️ Advanced Product Operations...");
 
     // Get showcased products first
-    const showcasedProducts = (await shop.products.showcased()) as Product[];
+    const showcasedProducts = (await shop.products.showcased({
+      columns: { mode: "full", images: "full", options: "full" },
+    })) as Product[];
     console.log(`\n🌟 Showcased Products: ${showcasedProducts.length}`);
 
     showcasedProducts.slice(0, 3).forEach((product: Product, index: number) => {
@@ -87,7 +89,7 @@ async function advancedUsageExample() {
     const firstPage = (await shop.products.paginated({
       page: 1,
       limit: 10,
-      minimal: false,
+      columns: { mode: "full", images: "full", options: "full" },
     })) as Product[];
 
     if (firstPage && firstPage.length > 0) {
@@ -143,7 +145,7 @@ async function advancedUsageExample() {
       console.log(`\n🔎 Detailed Product Analysis: ${productHandle}`);
 
       const detailedProduct = (await shop.products.find(productHandle, {
-        minimal: false,
+        columns: { mode: "full", images: "full", options: "full" },
       })) as Product | null;
       if (detailedProduct) {
         console.log(`  Title: ${detailedProduct.title}`);
@@ -270,7 +272,7 @@ async function advancedUsageExample() {
 
       const collectionProducts = (await shop.collections.products.all(
         targetCollection.handle,
-        { minimal: false }
+        { columns: { mode: "full", images: "full", options: "full" } }
       )) as Product[] | null;
       if (collectionProducts && collectionProducts.length > 0) {
         console.log(`  Products in collection: ${collectionProducts.length}`);
@@ -306,16 +308,17 @@ async function advancedUsageExample() {
       }
     }
 
-    const minimalAllProducts = await shop.products.minimal.all();
+    const minimalAllProducts = await shop.products.all();
     console.log(`\n🧪 Minimal products: ${(minimalAllProducts || []).length}`);
     if (allCollections.length > 0) {
-      const minimalCollectionProducts =
-        await shop.collections.products.minimal.all(allCollections[0].handle);
+      const minimalCollectionProducts = await shop.collections.products.all(
+        allCollections[0].handle
+      );
       console.log(
         `Minimal products in first collection: ${minimalCollectionProducts?.length || 0}`
       );
     }
-    const minimalShowcased = await shop.products.showcase.minimal();
+    const minimalShowcased = await shop.products.showcased();
     console.log(`Minimal showcased products: ${(minimalShowcased || []).length}`);
     console.log("\n✅ Advanced analysis completed successfully!");
     console.log("==========================================");
