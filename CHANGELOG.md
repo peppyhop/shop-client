@@ -1,3 +1,9 @@
+## [3.22.0](https://github.com/peppyhop/shop-client/compare/v3.21.0...v3.22.0) (2026-01-05)
+
+### Features
+
+* **products:** add variant images mapping to product types ([#43](https://github.com/peppyhop/shop-client/issues/43)) ([3244a13](https://github.com/peppyhop/shop-client/commit/3244a133466fe533aa40568cd4bf8a864353de98))
+
 ## [3.21.0](https://github.com/peppyhop/shop-client/compare/v3.20.0...v3.21.0) (2026-01-02)
 
 ### Features
