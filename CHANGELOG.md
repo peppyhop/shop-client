@@ -1,3 +1,9 @@
+## [3.24.0](https://github.com/peppyhop/shop-client/compare/v3.23.0...v3.24.0) (2026-01-05)
+
+### Features
+
+* **products:** add generic type support for product columns configuration ([#45](https://github.com/peppyhop/shop-client/issues/45)) ([fe142e2](https://github.com/peppyhop/shop-client/commit/fe142e23849b01cfd41291e52b2a4e99b76d1008))
+
 ## [3.23.0](https://github.com/peppyhop/shop-client/compare/v3.22.0...v3.23.0) (2026-01-05)
 
 ### Features
