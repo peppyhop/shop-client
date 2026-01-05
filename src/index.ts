@@ -12,9 +12,10 @@ import type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
 import { createShopOperations } from "./store";
 import type {
   Collection,
-  MinimalProduct,
+  CollectionColumnsConfig,
   OpenRouterConfig,
-  Product,
+  ProductColumnsConfig,
+  ProductResult,
   ShopifyCollection,
   ShopifyProduct,
   ShopifySingleProduct,
@@ -40,8 +41,10 @@ import { rateLimitedFetch } from "./utils/rate-limit";
  * ```
  */
 export type ShopClientOptions = {
-  cacheTTL?: number; // milliseconds for validation + info cache entries
+  cacheTTL?: number;
   openRouter?: OpenRouterConfig;
+  productColumns?: ProductColumnsConfig;
+  collectionColumns?: CollectionColumnsConfig;
 };
 
 export class ShopClient {
@@ -60,6 +63,12 @@ export class ShopClient {
   private metaCacheValue?: OpenGraphMeta;
   private metaCacheTimestamp?: number;
   private metaInFlight?: Promise<OpenGraphMeta>;
+  private productColumns: ProductColumnsConfig = {
+    mode: "minimal",
+    images: "minimal",
+    options: "minimal",
+  };
+  private collectionColumns?: CollectionColumnsConfig;
 
   // Public operations interfaces
   public products: ProductOperations;
@@ -157,6 +166,16 @@ export class ShopClient {
       this.cacheExpiry = options.cacheTTL;
     }
     this.openRouter = options?.openRouter;
+    if (options?.productColumns) {
+      this.productColumns = {
+        mode: options.productColumns.mode ?? this.productColumns.mode,
+        images: options.productColumns.images ?? this.productColumns.images,
+        options: options.productColumns.options ?? this.productColumns.options,
+      };
+    }
+    if (options?.collectionColumns) {
+      this.collectionColumns = options.collectionColumns;
+    }
 
     // Initialize operations
     this.shopOperations = createShopOperations({
@@ -176,6 +195,7 @@ export class ShopClient {
       this.productDto.bind(this),
       () => this.getInfo(),
       (handle: string) => this.products.find(handle),
+      () => this.productColumns,
       { openRouter: this.openRouter }
     );
 
@@ -230,8 +250,8 @@ export class ShopClient {
    */
   productsDto(
     products: ShopifyProduct[],
-    options?: { minimal?: boolean }
-  ): Product[] | MinimalProduct[] | null {
+    options?: { columns?: ProductColumnsConfig }
+  ): ProductResult[] | null {
     return mapProductsDto(
       products,
       {
@@ -241,14 +261,14 @@ export class ShopClient {
         normalizeImageUrl: (url) => this.normalizeImageUrl(url),
         formatPrice: (amount) => this.formatPrice(amount),
       },
-      { minimal: options?.minimal ?? false }
+      { columns: options?.columns ?? this.productColumns }
     );
   }
 
   productDto(
     product: ShopifySingleProduct,
-    options?: { minimal?: boolean }
-  ): Product | MinimalProduct {
+    options?: { columns?: ProductColumnsConfig }
+  ): ProductResult {
     return mapProductDto(
       product,
       {
@@ -258,7 +278,7 @@ export class ShopClient {
         normalizeImageUrl: (url) => this.normalizeImageUrl(url),
         formatPrice: (amount) => this.formatPrice(amount),
       },
-      { minimal: options?.minimal ?? false }
+      { columns: options?.columns ?? this.productColumns }
     );
   }
 
@@ -329,8 +349,8 @@ export class ShopClient {
   private async fetchProducts(
     page: number,
     limit: number,
-    options?: { minimal?: boolean }
-  ): Promise<Product[] | MinimalProduct[] | null> {
+    options?: { columns?: ProductColumnsConfig }
+  ): Promise<ProductResult[] | null> {
     try {
       const url = `${this.baseUrl}products.json?page=${page}&limit=${limit}`;
       const response = await rateLimitedFetch(url, {
@@ -343,7 +363,7 @@ export class ShopClient {
 
       const data: { products: ShopifyProduct[] } = await response.json();
       return this.productsDto(data.products, {
-        minimal: options?.minimal ?? false,
+        columns: options?.columns ?? this.productColumns,
       });
     } catch (error) {
       this.handleFetchError(
@@ -384,8 +404,12 @@ export class ShopClient {
    */
   private async fetchPaginatedProductsFromCollection(
     collectionHandle: string,
-    options: { page?: number; limit?: number; minimal?: boolean } = {}
-  ): Promise<Product[] | MinimalProduct[] | null> {
+    options: {
+      page?: number;
+      limit?: number;
+      columns?: ProductColumnsConfig;
+    } = {}
+  ): Promise<ProductResult[] | null> {
     try {
       const { page = 1, limit = 250 } = options;
       // Resolve canonical collection handle via HTML redirect if handle has changed
@@ -425,8 +449,8 @@ export class ShopClient {
 
       const data: { products: ShopifyProduct[] } = await response.json();
       return this.productsDto(data.products, {
-        minimal: options?.minimal ?? false,
-      }) as Product[] | MinimalProduct[] | null;
+        columns: options?.columns ?? this.productColumns,
+      });
     } catch (error) {
       this.handleFetchError(
         error,

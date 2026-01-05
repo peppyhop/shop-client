@@ -49,8 +49,14 @@ async function basicUsageExample() {
 
     console.log("\n🛍️ Fetching products...");
 
-    // Get all products
-    const products = (await shop.products.all({ minimal: false })) as Product[];
+    // Get all products (defaults to minimal payload)
+    const minimalProducts = await shop.products.all();
+    console.log(`Products found (minimal payload): ${minimalProducts?.length || 0}`);
+
+    // If you need the full product payload, override columns:
+    const products = (await shop.products.all({
+      columns: { mode: "full", images: "full", options: "full" },
+    })) as Product[] | null;
     console.log(`Total products found: ${products?.length || 0}`);
 
     if (products && products.length > 0) {
@@ -77,11 +83,9 @@ async function basicUsageExample() {
       console.log(`Products count: ${firstCollection.productsCount}`);
     }
 
-    const minimalProducts = await shop.products.minimal.all();
     console.log(`Minimal products found: ${minimalProducts?.length || 0}`);
     if (collections.length > 0) {
-      const minimalInFirst =
-        await shop.collections.products.minimal.all(collections[0].handle);
+      const minimalInFirst = await shop.collections.products.all(collections[0].handle);
       console.log(
         `Minimal products in first collection: ${minimalInFirst?.length || 0}`
       );
@@ -93,7 +97,7 @@ async function basicUsageExample() {
     if (products && products.length > 0) {
       const productHandle = products[0].handle;
       const foundProduct = (await shop.products.find(productHandle, {
-        minimal: false,
+        columns: { mode: "full", images: "full", options: "full" },
       })) as Product | null;
 
       if (foundProduct) {

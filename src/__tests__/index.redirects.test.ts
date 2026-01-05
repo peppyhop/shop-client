@@ -145,10 +145,12 @@ describe("Handle redirect resolution", () => {
     const shop = new ShopClient(baseUrl);
     await shop.getInfo();
 
-    const product = await shop.products.find("old-handle");
+    const product = await shop.products.find("old-handle", {
+      columns: { mode: "full", images: "full", options: "full" },
+    });
     expect(product).not.toBeNull();
     if (!product) return;
-    expect(product.handle).toBe("new-handle");
+    expect((product as any).handle).toBe("new-handle");
 
     // Ensure underlying JSON was fetched at new-handle
     const fetchMock = global.fetch as unknown as jest.Mock;

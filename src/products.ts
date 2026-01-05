@@ -4,10 +4,11 @@ import type { ShopInfo } from "./store";
 import type {
   CurrencyCode,
   EnhancedProductResponse,
-  MinimalProduct,
   OpenRouterConfig,
   Product,
   ProductClassification,
+  ProductColumnsConfig,
+  ProductResult,
   SEOContent,
   ShopifyPredictiveProductSearch,
   ShopifyProduct,
@@ -22,28 +23,29 @@ import { rateLimitedFetch } from "./utils/rate-limit";
 export interface ProductOperations {
   /**
    * Fetches all products from the store across all pages.
-   * Use `shop.products.minimal.all()` for MinimalProduct returns.
    */
-  all(options?: { currency?: CurrencyCode }): Promise<Product[] | null>;
+  all(options?: {
+    currency?: CurrencyCode;
+    columns?: ProductColumnsConfig;
+  }): Promise<ProductResult[] | null>;
 
   /**
    * Fetches products with pagination support.
-   * Use `shop.products.minimal.paginated()` for MinimalProduct returns.
    */
   paginated(options?: {
     page?: number;
     limit?: number;
     currency?: CurrencyCode;
-  }): Promise<Product[] | null>;
+    columns?: ProductColumnsConfig;
+  }): Promise<ProductResult[] | null>;
 
   /**
    * Finds a specific product by its handle.
-   * Use `shop.products.minimal.find()` for MinimalProduct returns.
    */
   find(
     productHandle: string,
-    options?: { currency?: CurrencyCode }
-  ): Promise<Product | null>;
+    options?: { currency?: CurrencyCode; columns?: ProductColumnsConfig }
+  ): Promise<ProductResult | null>;
 
   /**
    * Finds a product and enhances it with AI-generated content using an external service.
@@ -56,8 +58,13 @@ export interface ProductOperations {
    */
   findEnhanced(
     productHandle: string,
-    options: { apiKey: string; updatedAt?: string; endpoint?: string }
-  ): Promise<EnhancedProductResponse | null>;
+    options: {
+      apiKey: string;
+      updatedAt?: string;
+      endpoint?: string;
+      columns?: ProductColumnsConfig;
+    }
+  ): Promise<EnhancedProductResponse<ProductResult> | null>;
 
   /**
    * Finds a product by handle and enriches its content using LLM.
@@ -117,16 +124,9 @@ export interface ProductOperations {
   /**
    * Fetches products that are showcased/featured on the store's homepage.
    */
-  showcased(): Promise<Product[]>;
-  /**
-   * Showcase namespace for convenience methods related to featured items.
-   */
-  showcase: {
-    /**
-     * Returns showcased products in MinimalProduct form.
-     */
-    minimal(): Promise<MinimalProduct[]>;
-  };
+  showcased(options?: {
+    columns?: ProductColumnsConfig;
+  }): Promise<ProductResult[]>;
 
   /**
    * Creates a filter map of variant options and their distinct values from all products.
@@ -135,7 +135,6 @@ export interface ProductOperations {
 
   /**
    * Predictive product search using Shopify Ajax API.
-   * Use `shop.products.minimal.predictiveSearch()` for MinimalProduct returns.
    */
   predictiveSearch(
     query: string,
@@ -144,12 +143,12 @@ export interface ProductOperations {
       locale?: string;
       currency?: CurrencyCode;
       unavailableProducts?: "show" | "hide" | "last";
+      columns?: ProductColumnsConfig;
     }
-  ): Promise<Product[]>;
+  ): Promise<ProductResult[]>;
 
   /**
    * Product recommendations for a given product ID using Shopify Ajax API.
-   * Use `shop.products.minimal.recommendations()` for MinimalProduct returns.
    */
   recommendations(
     productId: number,
@@ -158,49 +157,9 @@ export interface ProductOperations {
       intent?: "related" | "complementary";
       locale?: string;
       currency?: CurrencyCode;
+      columns?: ProductColumnsConfig;
     }
-  ): Promise<Product[] | null>;
-
-  /**
-   * Minimal namespace for convenience methods that always return MinimalProduct types.
-   */
-  minimal: {
-    all(options?: {
-      currency?: CurrencyCode;
-    }): Promise<MinimalProduct[] | null>;
-    paginated(options?: {
-      page?: number;
-      limit?: number;
-      currency?: CurrencyCode;
-    }): Promise<MinimalProduct[] | null>;
-    find(
-      productHandle: string,
-      options?: { currency?: CurrencyCode }
-    ): Promise<MinimalProduct | null>;
-    findEnhanced(
-      productHandle: string,
-      options: { apiKey: string; updatedAt?: string; endpoint?: string }
-    ): Promise<EnhancedProductResponse<MinimalProduct> | null>;
-    showcased(): Promise<MinimalProduct[]>;
-    predictiveSearch(
-      query: string,
-      options?: {
-        limit?: number;
-        locale?: string;
-        currency?: CurrencyCode;
-        unavailableProducts?: "show" | "hide" | "last";
-      }
-    ): Promise<MinimalProduct[]>;
-    recommendations(
-      productId: number,
-      options?: {
-        limit?: number;
-        intent?: "related" | "complementary";
-        locale?: string;
-        currency?: CurrencyCode;
-      }
-    ): Promise<MinimalProduct[] | null>;
-  };
+  ): Promise<ProductResult[] | null>;
 }
 
 /**
@@ -212,126 +171,111 @@ export function createProductOperations(
   fetchProducts: (
     page: number,
     limit: number,
-    options?: { minimal?: boolean }
-  ) => Promise<Product[] | MinimalProduct[] | null>,
+    options?: { columns?: ProductColumnsConfig }
+  ) => Promise<ProductResult[] | null>,
   productsDto: (
     products: ShopifyProduct[],
-    options?: { minimal?: boolean }
-  ) => Product[] | MinimalProduct[] | null,
+    options?: { columns?: ProductColumnsConfig }
+  ) => ProductResult[] | null,
   productDto: (
     product: ShopifySingleProduct,
-    options?: { minimal?: boolean }
-  ) => Product | MinimalProduct,
+    options?: { columns?: ProductColumnsConfig }
+  ) => ProductResult,
   getStoreInfo: () => Promise<ShopInfo>,
   _findProduct: (
     handle: string,
-    options?: { minimal?: boolean }
-  ) => Promise<Product | MinimalProduct | null>,
+    options?: { columns?: ProductColumnsConfig }
+  ) => Promise<ProductResult | null>,
+  getDefaultProductColumns: () => ProductColumnsConfig,
   ai?: { openRouter?: OpenRouterConfig }
 ): ProductOperations {
   // Use shared formatter from utils
   const cacheExpiryMs = 5 * 60 * 1000; // 5 minutes
-  const findCacheFull = new Map<
+  const findCache = new Map<
     string,
-    { ts: number; value: Product | null }
+    { ts: number; value: ProductResult | null }
   >();
-  const findCacheMinimal = new Map<
-    string,
-    { ts: number; value: MinimalProduct | null }
-  >();
-  const getCachedFull = (key: string): Product | null | undefined => {
-    const entry = findCacheFull.get(key);
+  const getCached = (key: string): ProductResult | null | undefined => {
+    const entry = findCache.get(key);
     if (!entry) return undefined;
     if (Date.now() - entry.ts < cacheExpiryMs) return entry.value;
-    findCacheFull.delete(key);
+    findCache.delete(key);
     return undefined;
   };
-  const setCachedFull = (key: string, value: Product | null) => {
-    findCacheFull.set(key, { ts: Date.now(), value });
-  };
-  const getCachedMinimal = (key: string): MinimalProduct | null | undefined => {
-    const entry = findCacheMinimal.get(key);
-    if (!entry) return undefined;
-    if (Date.now() - entry.ts < cacheExpiryMs) return entry.value;
-    findCacheMinimal.delete(key);
-    return undefined;
-  };
-  const setCachedMinimal = (key: string, value: MinimalProduct | null) => {
-    findCacheMinimal.set(key, { ts: Date.now(), value });
+  const setCached = (key: string, value: ProductResult | null) => {
+    findCache.set(key, { ts: Date.now(), value });
   };
 
   function applyCurrencyOverride(
-    product: Product,
+    product: ProductResult,
     currency: CurrencyCode
-  ): Product {
-    const priceMin = product.priceMin ?? product.price ?? 0;
-    const priceMax = product.priceMax ?? product.price ?? 0;
-    const compareAtMin =
-      product.compareAtPriceMin ?? product.compareAtPrice ?? 0;
-    return {
-      ...product,
-      currency,
-      localizedPricing: {
+  ): ProductResult {
+    if ("priceMin" in product) {
+      const p = product as any;
+      const priceMin =
+        typeof p.priceMin === "number" ? p.priceMin : (p.price ?? 0);
+      const priceMax =
+        typeof p.priceMax === "number" ? p.priceMax : (p.price ?? 0);
+      const compareAtMin =
+        typeof p.compareAtPriceMin === "number"
+          ? p.compareAtPriceMin
+          : (p.compareAtPrice ?? 0);
+      return {
+        ...product,
         currency,
-        priceFormatted: formatPrice(priceMin, currency),
-        priceMinFormatted: formatPrice(priceMin, currency),
-        priceMaxFormatted: formatPrice(priceMax, currency),
-        compareAtPriceFormatted: formatPrice(compareAtMin, currency),
-      },
-    };
-  }
+        localizedPricing: {
+          currency,
+          priceFormatted: formatPrice(priceMin, currency),
+          priceMinFormatted: formatPrice(priceMin, currency),
+          priceMaxFormatted: formatPrice(priceMax, currency),
+          compareAtPriceFormatted: formatPrice(compareAtMin, currency),
+        },
+      } as ProductResult;
+    }
 
-  function applyCurrencyOverrideMinimal(
-    product: MinimalProduct,
-    currency: CurrencyCode
-  ): MinimalProduct {
-    const compareAtPrice = product.compareAtPrice ?? 0;
+    const compareAtPrice = (product as any).compareAtPrice ?? 0;
     return {
       ...product,
       localizedPricing: {
-        priceFormatted: formatPrice(product.price, currency),
+        priceFormatted: formatPrice((product as any).price ?? 0, currency),
         compareAtPriceFormatted: formatPrice(compareAtPrice, currency),
       },
-    };
+    } as ProductResult;
   }
 
   function maybeOverrideProductsCurrency(
-    products: Product[] | null,
+    products: ProductResult[] | null,
     currency?: CurrencyCode
-  ): Product[] | null {
+  ): ProductResult[] | null {
     if (!products || !currency || products.length === 0) return products;
     return products.map((p) => applyCurrencyOverride(p, currency));
   }
 
-  function maybeOverrideMinimalProductsCurrency(
-    products: MinimalProduct[] | null,
-    currency?: CurrencyCode
-  ): MinimalProduct[] | null {
-    if (!products || !currency || products.length === 0) return products;
-    return products.map((p) => applyCurrencyOverrideMinimal(p, currency));
-  }
+  const resolveColumns = (
+    override?: ProductColumnsConfig
+  ): ProductColumnsConfig => {
+    const base = getDefaultProductColumns() || {};
+    return {
+      mode: override?.mode ?? base.mode ?? "minimal",
+      images: override?.images ?? base.images ?? "minimal",
+      options: override?.options ?? base.options ?? "minimal",
+    };
+  };
 
-  function allInternal(options: {
-    currency?: CurrencyCode;
-    minimal: true;
-  }): Promise<MinimalProduct[] | null>;
-  function allInternal(options: {
-    currency?: CurrencyCode;
-    minimal: false;
-  }): Promise<Product[] | null>;
   async function allInternal(options: {
     currency?: CurrencyCode;
-    minimal: boolean;
-  }): Promise<Product[] | MinimalProduct[] | null> {
+    columns?: ProductColumnsConfig;
+  }): Promise<ProductResult[] | null> {
     const limit = 250;
-    const allProducts: (Product | MinimalProduct)[] = [];
+    const allProducts: ProductResult[] = [];
+    const columns = resolveColumns(options.columns);
 
     async function fetchAll() {
       let currentPage = 1;
 
       while (true) {
         const products = await fetchProducts(currentPage, limit, {
-          minimal: options.minimal,
+          columns,
         });
 
         if (!products || products.length === 0 || products.length < limit) {
@@ -344,46 +288,27 @@ export function createProductOperations(
         allProducts.push(...products);
         currentPage++;
       }
-      return allProducts as Product[] | MinimalProduct[];
+      return allProducts;
     }
 
     try {
       const products = await fetchAll();
-      return options.minimal
-        ? maybeOverrideMinimalProductsCurrency(
-            products as MinimalProduct[],
-            options.currency
-          )
-        : maybeOverrideProductsCurrency(
-            products as Product[],
-            options.currency
-          );
+      return maybeOverrideProductsCurrency(products, options.currency);
     } catch (error) {
       console.error("Failed to fetch all products:", storeDomain, error);
       throw error;
     }
   }
 
-  function paginatedInternal(options: {
-    page?: number;
-    limit?: number;
-    currency?: CurrencyCode;
-    minimal: true;
-  }): Promise<MinimalProduct[] | null>;
-  function paginatedInternal(options: {
-    page?: number;
-    limit?: number;
-    currency?: CurrencyCode;
-    minimal: false;
-  }): Promise<Product[] | null>;
   async function paginatedInternal(options: {
     page?: number;
     limit?: number;
     currency?: CurrencyCode;
-    minimal: boolean;
-  }): Promise<Product[] | MinimalProduct[] | null> {
+    columns?: ProductColumnsConfig;
+  }): Promise<ProductResult[] | null> {
     const page = options.page ?? 1;
     const limit = Math.min(options.limit ?? 250, 250);
+    const columns = resolveColumns(options.columns);
     const url = `${baseUrl}products.json?limit=${limit}&page=${page}`;
 
     try {
@@ -404,17 +329,12 @@ export function createProductOperations(
         return [];
       }
       const normalized = productsDto(data.products, {
-        minimal: options.minimal,
+        columns,
       });
-      return options.minimal
-        ? maybeOverrideMinimalProductsCurrency(
-            (normalized as MinimalProduct[] | null) || null,
-            options.currency
-          )
-        : maybeOverrideProductsCurrency(
-            (normalized as Product[] | null) || null,
-            options.currency
-          );
+      return maybeOverrideProductsCurrency(
+        (normalized as ProductResult[] | null) || null,
+        options.currency
+      );
     } catch (error) {
       console.error(
         `Error fetching products for ${storeDomain} page ${page} with limit ${limit}:`,
@@ -424,22 +344,10 @@ export function createProductOperations(
     }
   }
 
-  function findInternal(
-    productHandle: string,
-    options: { currency?: CurrencyCode; minimal: true }
-  ): Promise<MinimalProduct | null>;
-  function findInternal(
-    productHandle: string,
-    options: { currency?: CurrencyCode; minimal: false }
-  ): Promise<Product | null>;
-  function findInternal(
-    productHandle: string,
-    options: { currency?: CurrencyCode; minimal: boolean }
-  ): Promise<Product | MinimalProduct | null>;
   async function findInternal(
     productHandle: string,
-    options: { currency?: CurrencyCode; minimal: boolean }
-  ): Promise<Product | MinimalProduct | null> {
+    options: { currency?: CurrencyCode; columns?: ProductColumnsConfig }
+  ): Promise<ProductResult | null> {
     if (!productHandle || typeof productHandle !== "string") {
       throw new Error("Product handle is required and must be a string");
     }
@@ -465,17 +373,15 @@ export function createProductOperations(
         throw new Error("Product handle is too long");
       }
 
-      const cached = options.minimal
-        ? getCachedMinimal(sanitizedHandle)
-        : getCachedFull(sanitizedHandle);
+      const columns = resolveColumns(options.columns);
+      const cacheKey = `${sanitizedHandle}|${columns.mode}|${columns.images}|${columns.options}`;
+      const cached = getCached(cacheKey) as unknown as
+        | ProductResult
+        | null
+        | undefined;
       if (typeof cached !== "undefined") {
         if (!cached || !options.currency) return cached;
-        return options.minimal
-          ? applyCurrencyOverrideMinimal(
-              cached as MinimalProduct,
-              options.currency
-            )
-          : applyCurrencyOverride(cached as Product, options.currency);
+        return applyCurrencyOverride(cached, options.currency);
       }
 
       let finalHandle = sanitizedHandle;
@@ -513,24 +419,16 @@ export function createProductOperations(
       }
 
       const product = (await response.json()) as ShopifySingleProduct;
-      const productData = productDto(product, { minimal: options.minimal });
+      const productData = productDto(product, { columns });
 
-      if (options.minimal) {
-        const minimalData = productData as MinimalProduct;
-        setCachedMinimal(sanitizedHandle, minimalData);
-        if (finalHandle !== sanitizedHandle)
-          setCachedMinimal(finalHandle, minimalData);
-        return options.currency
-          ? applyCurrencyOverrideMinimal(minimalData, options.currency)
-          : minimalData;
+      setCached(cacheKey, productData as any);
+      if (finalHandle !== sanitizedHandle) {
+        const finalKey = `${finalHandle}|${columns.mode}|${columns.images}|${columns.options}`;
+        setCached(finalKey, productData as any);
       }
-
-      const fullData = productData as Product;
-      setCachedFull(sanitizedHandle, fullData);
-      if (finalHandle !== sanitizedHandle) setCachedFull(finalHandle, fullData);
       return options.currency
-        ? applyCurrencyOverride(fullData, options.currency)
-        : fullData;
+        ? applyCurrencyOverride(productData, options.currency)
+        : productData;
     } catch (error) {
       if (error instanceof Error) {
         console.error(
@@ -543,26 +441,6 @@ export function createProductOperations(
     }
   }
 
-  function predictiveSearchInternal(
-    query: string,
-    options: {
-      limit?: number;
-      locale?: string;
-      currency?: CurrencyCode;
-      unavailableProducts?: "show" | "hide" | "last";
-      minimal: true;
-    }
-  ): Promise<MinimalProduct[]>;
-  function predictiveSearchInternal(
-    query: string,
-    options: {
-      limit?: number;
-      locale?: string;
-      currency?: CurrencyCode;
-      unavailableProducts?: "show" | "hide" | "last";
-      minimal: false;
-    }
-  ): Promise<Product[]>;
   async function predictiveSearchInternal(
     query: string,
     options: {
@@ -570,13 +448,14 @@ export function createProductOperations(
       locale?: string;
       currency?: CurrencyCode;
       unavailableProducts?: "show" | "hide" | "last";
-      minimal: boolean;
+      columns?: ProductColumnsConfig;
     }
-  ): Promise<Product[] | MinimalProduct[]> {
+  ): Promise<ProductResult[]> {
     if (!query || typeof query !== "string") {
       throw new Error("Query is required and must be a string");
     }
     const limit = Math.max(1, Math.min(options.limit ?? 10, 10));
+    const columns = resolveColumns(options.columns);
     const unavailable =
       options.unavailableProducts === "show" ||
       options.unavailableProducts === "hide"
@@ -621,41 +500,17 @@ export function createProductOperations(
       .filter((h) => typeof h === "string" && h.length > 0)
       .slice(0, limit);
     const fetched = await Promise.all(
-      handles.map((h) => findInternal(h, { minimal: options.minimal }))
+      handles.map((h) => findInternal(h, { columns }))
     );
     const results = filter(fetched, isNonNullish);
-    const finalProducts = options.minimal
-      ? (maybeOverrideMinimalProductsCurrency(
-          results as MinimalProduct[],
-          options.currency
-        ) ?? [])
-      : (maybeOverrideProductsCurrency(
-          results as Product[],
-          options.currency
-        ) ?? []);
-    return finalProducts as Product[] | MinimalProduct[];
+    return (
+      maybeOverrideProductsCurrency(
+        results as ProductResult[],
+        options.currency
+      ) ?? []
+    );
   }
 
-  function recommendationsInternal(
-    productId: number,
-    options: {
-      limit?: number;
-      intent?: "related" | "complementary";
-      locale?: string;
-      currency?: CurrencyCode;
-      minimal: true;
-    }
-  ): Promise<MinimalProduct[] | null>;
-  function recommendationsInternal(
-    productId: number,
-    options: {
-      limit?: number;
-      intent?: "related" | "complementary";
-      locale?: string;
-      currency?: CurrencyCode;
-      minimal: false;
-    }
-  ): Promise<Product[] | null>;
   async function recommendationsInternal(
     productId: number,
     options: {
@@ -663,14 +518,15 @@ export function createProductOperations(
       intent?: "related" | "complementary";
       locale?: string;
       currency?: CurrencyCode;
-      minimal: boolean;
+      columns?: ProductColumnsConfig;
     }
-  ): Promise<Product[] | MinimalProduct[] | null> {
+  ): Promise<ProductResult[] | null> {
     if (!Number.isFinite(productId) || productId <= 0) {
       throw new Error("Valid productId is required");
     }
     const limit = Math.max(1, Math.min(options.limit ?? 10, 10));
     const intent = options.intent ?? "related";
+    const columns = resolveColumns(options.columns);
     const localeValue = (options.locale && options.locale.trim()) || "en";
     const localePrefix = `${localeValue.replace(/^\/|\/$/g, "")}/`;
     const url =
@@ -698,18 +554,11 @@ export function createProductOperations(
       : isRecord(data) && Array.isArray(data.products)
         ? (data.products as ShopifyProduct[])
         : [];
-    const normalized =
-      productsDto(productsArray, { minimal: options.minimal }) || [];
-    const finalProducts = options.minimal
-      ? maybeOverrideMinimalProductsCurrency(
-          normalized as MinimalProduct[],
-          options.currency
-        )
-      : maybeOverrideProductsCurrency(
-          normalized as Product[],
-          options.currency
-        );
-    return finalProducts ?? [];
+    const normalized = productsDto(productsArray, { columns }) || [];
+    return maybeOverrideProductsCurrency(
+      normalized as ProductResult[],
+      options.currency
+    );
   }
 
   /**
@@ -723,8 +572,13 @@ export function createProductOperations(
    */
   async function findEnhancedInternal(
     productHandle: string,
-    options: { apiKey: string; updatedAt?: string; endpoint?: string }
-  ): Promise<EnhancedProductResponse | null> {
+    options: {
+      apiKey: string;
+      updatedAt?: string;
+      endpoint?: string;
+      columns?: ProductColumnsConfig;
+    }
+  ): Promise<EnhancedProductResponse<ProductResult> | null> {
     const apiKey = options.apiKey;
     if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
       throw new Error("apiKey is required");
@@ -739,7 +593,8 @@ export function createProductOperations(
       throw new Error("updatedAt must be a string");
     }
 
-    const baseProduct = await findInternal(productHandle, { minimal: false });
+    const columns = resolveColumns(options.columns);
+    const baseProduct = await findInternal(productHandle, { columns });
     if (!baseProduct) return null;
 
     const endpoint =
@@ -753,6 +608,31 @@ export function createProductOperations(
       hostname = storeDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     }
 
+    let resolvedHandle = productHandle;
+    try {
+      const base = (productHandle.split("?")[0] ?? productHandle).trim();
+      const sanitized = base.replace(/[^a-zA-Z0-9\-_]/g, "");
+      if (sanitized) {
+        resolvedHandle = sanitized;
+        const htmlResp = await rateLimitedFetch(
+          `${baseUrl}products/${encodeURIComponent(sanitized)}`,
+          { rateLimitClass: "products:resolve" }
+        );
+        if (htmlResp.ok) {
+          const finalUrl = htmlResp.url;
+          if (finalUrl) {
+            const pathname = new URL(finalUrl).pathname.replace(/\/$/, "");
+            const parts = pathname.split("/").filter(Boolean);
+            const idx = parts.indexOf("products");
+            const maybeHandle = idx >= 0 ? parts[idx + 1] : undefined;
+            if (typeof maybeHandle === "string" && maybeHandle.length) {
+              resolvedHandle = maybeHandle;
+            }
+          }
+        }
+      }
+    } catch {}
+
     const resp = await rateLimitedFetch(endpoint, {
       method: "POST",
       headers: {
@@ -761,7 +641,7 @@ export function createProductOperations(
       },
       body: JSON.stringify({
         storeDomain: hostname,
-        handle: baseProduct.handle,
+        handle: resolvedHandle,
         ...(updatedAtTrimmed ? { updatedAt: updatedAtTrimmed } : {}),
       }),
       rateLimitClass: "products:enhanced",
@@ -788,20 +668,20 @@ export function createProductOperations(
       enrichment: EnhancedProductResponse["enrichment"];
       cache: EnhancedProductResponse["cache"];
     };
-    let mappedProduct: Product = baseProduct;
+    let mappedProduct: ProductResult = baseProduct;
     try {
       const raw = parsed.shopify;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         if ("body_html" in raw) {
           const mapped = productsDto([raw as ShopifyProduct], {
-            minimal: false,
+            columns,
           });
           const first = Array.isArray(mapped) ? mapped[0] : null;
-          if (first) mappedProduct = first as Product;
+          if (first) mappedProduct = first as ProductResult;
         } else if ("description" in raw) {
           mappedProduct = productDto(raw as ShopifySingleProduct, {
-            minimal: false,
-          }) as Product;
+            columns,
+          }) as ProductResult;
         }
       }
     } catch {}
@@ -809,110 +689,6 @@ export function createProductOperations(
       enrichment: parsed.enrichment,
       cache: parsed.cache,
       product: mappedProduct,
-    };
-  }
-
-  /**
-   * Internal implementation of minimal.findEnhanced.
-   *
-   * @param productHandle - The handle of the product to find.
-   * @param options - Options for the request.
-   * @param options.apiKey - API key for the enhancement service. Required for authentication via x-api-key header.
-   * @param options.updatedAt - Optional product updatedAt timestamp used to cache-bust/invalidate enrichment.
-   * @param options.endpoint - Optional custom endpoint URL for the enhancement service. Defaults to the standard worker URL.
-   */
-  async function findEnhancedMinimalInternal(
-    productHandle: string,
-    options: { apiKey: string; updatedAt?: string; endpoint?: string }
-  ): Promise<EnhancedProductResponse<MinimalProduct> | null> {
-    const apiKey = options.apiKey;
-    if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
-      throw new Error("apiKey is required");
-    }
-
-    const updatedAt = (options as any).updatedAt as unknown;
-    let updatedAtTrimmed: string | undefined;
-    if (typeof updatedAt === "string") {
-      const trimmed = updatedAt.trim();
-      updatedAtTrimmed = trimmed ? trimmed : undefined;
-    } else if (updatedAt != null) {
-      throw new Error("updatedAt must be a string");
-    }
-
-    const baseProduct = await findInternal(productHandle, { minimal: false });
-    if (!baseProduct) return null;
-
-    const endpoint =
-      (typeof options.endpoint === "string" && options.endpoint.trim()) ||
-      "https://shopify-product-enrichment-worker.ninjacode.workers.dev";
-
-    let hostname = storeDomain;
-    try {
-      hostname = new URL(storeDomain).hostname;
-    } catch {
-      hostname = storeDomain.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-    }
-
-    const resp = await rateLimitedFetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        storeDomain: hostname,
-        handle: baseProduct.handle,
-        ...(updatedAtTrimmed ? { updatedAt: updatedAtTrimmed } : {}),
-      }),
-      rateLimitClass: "products:enhanced",
-      timeoutMs: 15000,
-      retry: {
-        maxRetries: 2,
-        baseDelayMs: 300,
-        retryOnStatuses: [429, 500, 502, 503, 504],
-      },
-    });
-    if (!resp.ok) {
-      throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
-    }
-    const data: unknown = await resp.json();
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
-      throw new Error("Invalid enhanced product response");
-    }
-    const o = data as Record<string, unknown>;
-    if (!("shopify" in o) || !("enrichment" in o) || !("cache" in o)) {
-      throw new Error("Invalid enhanced product response");
-    }
-    const parsed = data as {
-      shopify: unknown;
-      enrichment: EnhancedProductResponse["enrichment"];
-      cache: EnhancedProductResponse["cache"];
-    };
-    let mappedMinimal: MinimalProduct | null = null;
-    try {
-      const raw = parsed.shopify;
-      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-        if ("body_html" in raw) {
-          const mapped = productsDto([raw as ShopifyProduct], {
-            minimal: true,
-          });
-          const first = Array.isArray(mapped) ? mapped[0] : null;
-          mappedMinimal = (first as MinimalProduct) || null;
-        } else if ("description" in raw) {
-          mappedMinimal = productDto(raw as ShopifySingleProduct, {
-            minimal: true,
-          }) as MinimalProduct;
-        }
-      }
-    } catch {}
-    if (!mappedMinimal) {
-      mappedMinimal = await findInternal(baseProduct.handle, { minimal: true });
-    }
-    if (!mappedMinimal) return null;
-    return {
-      enrichment: parsed.enrichment,
-      cache: parsed.cache,
-      product: mappedMinimal,
     };
   }
 
@@ -937,8 +713,12 @@ export function createProductOperations(
      */
     all: async (options?: {
       currency?: CurrencyCode;
-    }): Promise<Product[] | null> =>
-      allInternal({ currency: options?.currency, minimal: false }),
+      columns?: ProductColumnsConfig;
+    }): Promise<ProductResult[] | null> =>
+      allInternal({
+        currency: options?.currency,
+        columns: options?.columns,
+      }),
 
     /**
      * Fetches products with pagination support.
@@ -966,12 +746,13 @@ export function createProductOperations(
       page?: number;
       limit?: number;
       currency?: CurrencyCode;
-    }): Promise<Product[] | null> =>
+      columns?: ProductColumnsConfig;
+    }): Promise<ProductResult[] | null> =>
       paginatedInternal({
         page: options?.page,
         limit: options?.limit,
         currency: options?.currency,
-        minimal: false,
+        columns: options?.columns,
       }),
 
     /**
@@ -1001,17 +782,22 @@ export function createProductOperations(
      */
     find: async (
       productHandle: string,
-      options?: { currency?: CurrencyCode }
-    ): Promise<Product | null> =>
+      options?: { currency?: CurrencyCode; columns?: ProductColumnsConfig }
+    ): Promise<ProductResult | null> =>
       findInternal(productHandle, {
-        minimal: false,
         currency: options?.currency,
+        columns: options?.columns,
       }),
 
     findEnhanced: async (
       productHandle: string,
-      options: { apiKey: string; updatedAt?: string; endpoint?: string }
-    ): Promise<EnhancedProductResponse | null> =>
+      options: {
+        apiKey: string;
+        updatedAt?: string;
+        endpoint?: string;
+        columns?: ProductColumnsConfig;
+      }
+    ): Promise<EnhancedProductResponse<ProductResult> | null> =>
       findEnhancedInternal(productHandle, options),
 
     /**
@@ -1033,11 +819,11 @@ export function createProductOperations(
         throw new Error("Product handle is required and must be a string");
       }
 
-      // Reuse find() for validation and normalized product
-      const baseProduct = await operations.find(productHandle);
+      const baseProduct = (await findInternal(productHandle, {
+        columns: { mode: "full", images: "full", options: "full" },
+      })) as Product | null;
       if (!baseProduct) return null;
 
-      // Use the normalized handle from the found product
       const handle = baseProduct.handle;
       const { enrichProduct } = await import("./ai/enrich");
       const enriched = await enrichProduct(storeDomain, handle, {
@@ -1069,8 +855,9 @@ export function createProductOperations(
         throw new Error("Product handle is required and must be a string");
       }
 
-      // Reuse find() for validation and normalized product
-      const baseProduct = await operations.find(productHandle);
+      const baseProduct = (await findInternal(productHandle, {
+        columns: { mode: "full", images: "full", options: "full" },
+      })) as Product | null;
       if (!baseProduct) throw new Error("Product not found");
 
       const handle = baseProduct.handle;
@@ -1140,7 +927,9 @@ export function createProductOperations(
         throw new Error("Product handle is required and must be a string");
       }
 
-      const baseProduct = await operations.find(productHandle);
+      const baseProduct = (await findInternal(productHandle, {
+        columns: { mode: "full", images: "full", options: "full" },
+      })) as Product | null;
       if (!baseProduct) throw new Error("Product not found");
 
       const handle = baseProduct.handle;
@@ -1160,7 +949,9 @@ export function createProductOperations(
         throw new Error("Product handle is required and must be a string");
       }
 
-      const baseProduct = await operations.find(productHandle);
+      const baseProduct = (await findInternal(productHandle, {
+        columns: { mode: "full", images: "full", options: "full" },
+      })) as Product | null;
       if (!baseProduct) return null;
 
       const payload = {
@@ -1215,7 +1006,9 @@ export function createProductOperations(
         return extractMainSection(content);
       }
 
-      const baseProduct = await operations.find(productHandle);
+      const baseProduct = (await findInternal(productHandle, {
+        columns: { mode: "full", images: "full", options: "full" },
+      })) as Product | null;
       if (!baseProduct) return null;
 
       const pageHtml = await fetchProductPage(storeDomain, baseProduct.handle);
@@ -1240,7 +1033,9 @@ export function createProductOperations(
      * });
      * ```
      */
-    showcased: async (): Promise<Product[]> => {
+    showcased: async (options?: {
+      columns?: ProductColumnsConfig;
+    }): Promise<ProductResult[]> => {
       const storeInfo = await getStoreInfo();
       const normalizedHandles = storeInfo.showcase.products
         .map((h: string) => h.split("?")[0]?.replace(/^\/|\/$/g, ""))
@@ -1252,12 +1047,15 @@ export function createProductOperations(
         seen.add(base);
         uniqueHandles.push(base);
       }
+      const columns = resolveColumns(options?.columns);
       const products = await Promise.all(
         uniqueHandles.map((productHandle: string) =>
-          findInternal(productHandle, { minimal: false })
+          findInternal(productHandle, {
+            columns,
+          })
         )
       );
-      return filter(products, isNonNullish) as Product[];
+      return filter(products, isNonNullish) as ProductResult[];
     },
 
     /**
@@ -1285,7 +1083,9 @@ export function createProductOperations(
       try {
         // Use the existing all() method to get all products across all pages
         // We cast to Product[] because filter logic requires full product details (options, variants)
-        const products = (await operations.all()) as Product[] | null;
+        const products = (await operations.all({
+          columns: { mode: "full", images: "full", options: "full" },
+        })) as Product[] | null;
         if (!products || products.length === 0) {
           return {};
         }
@@ -1378,15 +1178,16 @@ export function createProductOperations(
         locale?: string;
         currency?: CurrencyCode;
         unavailableProducts?: "show" | "hide" | "last";
+        columns?: ProductColumnsConfig;
       }
-    ): Promise<Product[]> =>
+    ): Promise<ProductResult[]> =>
       predictiveSearchInternal(query, {
         limit: options?.limit,
         locale: options?.locale,
         currency: options?.currency,
         unavailableProducts: options?.unavailableProducts,
-        minimal: false,
-      }) as Promise<Product[]>,
+        columns: options?.columns,
+      }),
 
     recommendations: async (
       productId: number,
@@ -1395,108 +1196,16 @@ export function createProductOperations(
         intent?: "related" | "complementary";
         locale?: string;
         currency?: CurrencyCode;
+        columns?: ProductColumnsConfig;
       }
-    ): Promise<Product[] | null> =>
+    ): Promise<ProductResult[] | null> =>
       recommendationsInternal(productId, {
         limit: options?.limit,
         intent: options?.intent,
         locale: options?.locale,
         currency: options?.currency,
-        minimal: false,
-      }) as Promise<Product[] | null>,
-    minimal: {
-      all: async (options?: {
-        currency?: CurrencyCode;
-      }): Promise<MinimalProduct[] | null> => {
-        return allInternal({ minimal: true, currency: options?.currency });
-      },
-      paginated: async (options?: {
-        page?: number;
-        limit?: number;
-        currency?: CurrencyCode;
-      }): Promise<MinimalProduct[] | null> => {
-        return paginatedInternal({
-          page: options?.page,
-          limit: options?.limit,
-          currency: options?.currency,
-          minimal: true,
-        });
-      },
-      find: async (
-        productHandle: string,
-        options?: { currency?: CurrencyCode }
-      ): Promise<MinimalProduct | null> => {
-        return findInternal(productHandle, {
-          minimal: true,
-          currency: options?.currency,
-        });
-      },
-      findEnhanced: async (
-        productHandle: string,
-        options: { apiKey: string; updatedAt?: string; endpoint?: string }
-      ): Promise<EnhancedProductResponse<MinimalProduct> | null> => {
-        return findEnhancedMinimalInternal(productHandle, options);
-      },
-      showcased: async (): Promise<MinimalProduct[]> => {
-        const res = await operations.showcase.minimal();
-        return (res || []) as MinimalProduct[];
-      },
-      predictiveSearch: async (
-        query: string,
-        options?: {
-          limit?: number;
-          locale?: string;
-          currency?: CurrencyCode;
-          unavailableProducts?: "show" | "hide" | "last";
-        }
-      ): Promise<MinimalProduct[]> => {
-        return predictiveSearchInternal(query, {
-          limit: options?.limit,
-          locale: options?.locale,
-          currency: options?.currency,
-          unavailableProducts: options?.unavailableProducts,
-          minimal: true,
-        }) as Promise<MinimalProduct[]>;
-      },
-      recommendations: async (
-        productId: number,
-        options?: {
-          limit?: number;
-          intent?: "related" | "complementary";
-          locale?: string;
-          currency?: CurrencyCode;
-        }
-      ): Promise<MinimalProduct[] | null> => {
-        return recommendationsInternal(productId, {
-          limit: options?.limit,
-          intent: options?.intent,
-          locale: options?.locale,
-          currency: options?.currency,
-          minimal: true,
-        }) as Promise<MinimalProduct[] | null>;
-      },
-    },
-    showcase: {
-      minimal: async (): Promise<MinimalProduct[]> => {
-        const storeInfo = await getStoreInfo();
-        const normalizedHandles = storeInfo.showcase.products
-          .map((h: string) => h.split("?")[0]?.replace(/^\/|\/$/g, ""))
-          .filter((base): base is string => Boolean(base));
-        const seen = new Set<string>();
-        const uniqueHandles: string[] = [];
-        for (const base of normalizedHandles) {
-          if (seen.has(base)) continue;
-          seen.add(base);
-          uniqueHandles.push(base);
-        }
-        const products = await Promise.all(
-          uniqueHandles.map((productHandle: string) =>
-            findInternal(productHandle, { minimal: true })
-          )
-        );
-        return filter(products, isNonNullish) as MinimalProduct[];
-      },
-    },
+        columns: options?.columns,
+      }),
   };
 
   return operations;

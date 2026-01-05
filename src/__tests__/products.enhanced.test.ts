@@ -213,7 +213,10 @@ describe("products.findEnhanced", () => {
       shop.products.findEnhanced(handle, { apiKey: "test-key" })
     ).resolves.toBeDefined();
     await expect(
-      shop.products.minimal.findEnhanced(handle, { apiKey: "test-key" })
+      shop.products.findEnhanced(handle, {
+        apiKey: "test-key",
+        columns: { mode: "minimal", images: "minimal", options: "minimal" },
+      })
     ).resolves.toBeDefined();
   });
 
@@ -222,9 +225,10 @@ describe("products.findEnhanced", () => {
     const result = await shop.products.findEnhanced(handle, {
       apiKey: "test-key",
       updatedAt,
+      columns: { mode: "full", images: "full", options: "full" },
     });
     const expectedProduct = (shop.productsDto([shopifyProduct], {
-      minimal: false,
+      columns: { mode: "full", images: "full", options: "full" },
     }) as any)?.[0];
     expect(result).toEqual({
       product: expectedProduct,
@@ -270,10 +274,11 @@ describe("products.findEnhanced", () => {
       apiKey: "test-key",
       updatedAt,
       endpoint: customEndpoint,
+      columns: { mode: "full", images: "full", options: "full" },
     });
     
     const expectedProduct = (shop.productsDto([shopifyProduct], {
-      minimal: false,
+      columns: { mode: "full", images: "full", options: "full" },
     }) as any)?.[0];
     expect(result).toEqual({
       product: expectedProduct,
@@ -285,14 +290,15 @@ describe("products.findEnhanced", () => {
     expect(call).toBeDefined();
   });
 
-  test("minimal.findEnhanced applies minimal DTO transforms", async () => {
+  test("findEnhanced supports minimal DTO transforms via columns config", async () => {
     const shop = new ShopClient(baseUrl);
-    const result = await shop.products.minimal.findEnhanced(handle, {
+    const result = await shop.products.findEnhanced(handle, {
       apiKey: "test-key",
       updatedAt,
+      columns: { mode: "minimal", images: "minimal", options: "minimal" },
     });
     const expectedProduct = (shop.productsDto([shopifyProduct], {
-      minimal: true,
+      columns: { mode: "minimal", images: "minimal", options: "minimal" },
     }) as any)?.[0];
     expect(result).toEqual({
       product: expectedProduct,
@@ -304,8 +310,14 @@ describe("products.findEnhanced", () => {
   test("findEnhanced.product matches find() response for core fields", async () => {
     const shop = new ShopClient(baseUrl);
     const [base, enhanced] = await Promise.all([
-      shop.products.find(handle),
-      shop.products.findEnhanced(handle, { apiKey: "test-key", updatedAt }),
+      shop.products.find(handle, {
+        columns: { mode: "full", images: "full", options: "full" },
+      }),
+      shop.products.findEnhanced(handle, {
+        apiKey: "test-key",
+        updatedAt,
+        columns: { mode: "full", images: "full", options: "full" },
+      }),
     ]);
 
     expect(base).not.toBeNull();
@@ -315,11 +327,17 @@ describe("products.findEnhanced", () => {
     expectCoreProductFieldsMatch(enhanced.product, base);
   });
 
-  test("minimal.findEnhanced.product matches minimal.find() response", async () => {
+  test("findEnhanced.product matches find() response under minimal columns", async () => {
     const shop = new ShopClient(baseUrl);
     const [base, enhanced] = await Promise.all([
-      shop.products.minimal.find(handle),
-      shop.products.minimal.findEnhanced(handle, { apiKey: "test-key", updatedAt }),
+      shop.products.find(handle, {
+        columns: { mode: "minimal", images: "minimal", options: "minimal" },
+      }),
+      shop.products.findEnhanced(handle, {
+        apiKey: "test-key",
+        updatedAt,
+        columns: { mode: "minimal", images: "minimal", options: "minimal" },
+      }),
     ]);
 
     expect(base).not.toBeNull();
