@@ -1,3 +1,9 @@
+## [3.23.0](https://github.com/peppyhop/shop-client/compare/v3.22.0...v3.23.0) (2026-01-05)
+
+### Features
+
+* **products:** replace minimal/full product separation with columns config ([#44](https://github.com/peppyhop/shop-client/issues/44)) ([5632d22](https://github.com/peppyhop/shop-client/commit/5632d22b8f46bd8f026216d4d84169ef47198d99))
+
 ## [3.22.0](https://github.com/peppyhop/shop-client/compare/v3.21.0...v3.22.0) (2026-01-05)
 
 ### Features
