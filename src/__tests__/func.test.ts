@@ -1,13 +1,13 @@
 import {
-    buildVariantKey,
-    buildVariantOptionsMap,
-    calculateDiscount,
-    extractDomainWithoutSuffix,
-    generateStoreSlug,
-    genProductSlug,
-    normalizeKey,
-    safeParseDate,
-    sanitizeDomain,
+  buildVariantKey,
+  buildVariantOptionsMap,
+  calculateDiscount,
+  extractDomainWithoutSuffix,
+  generateStoreSlug,
+  genProductSlug,
+  normalizeKey,
+  safeParseDate,
+  sanitizeDomain,
 } from "../utils/func";
 
 describe("Utility Functions", () => {
@@ -287,9 +287,9 @@ describe("Utility Functions", () => {
 
       const map = buildVariantOptionsMap(optionNames, variants);
       expect(map).toEqual({
-        "color#blue##size#xl": "1",
-        "color#red##size#xl": "2",
-        "color#blue##size#l": "3",
+        "color__blue____size__xl": "1",
+        "color__red____size__xl": "2",
+        "color__blue____size__l": "3",
       });
     });
 
@@ -304,8 +304,8 @@ describe("Utility Functions", () => {
       const map = buildVariantOptionsMap(optionNames, variants);
       expect(map).toEqual({
         // first-write wins, duplicates are ignored
-        "size#xl": "10",
-        "size#l": "12",
+        "size__xl": "10",
+        "size__l": "12",
       });
     });
 
@@ -317,7 +317,7 @@ describe("Utility Functions", () => {
 
       const map = buildVariantOptionsMap(optionNames, variants);
       expect(map).toEqual({
-        "color#blue##material#cotton##size#m": "21",
+        "color__blue____material__cotton____size__m": "21",
       });
     });
   });
@@ -325,17 +325,17 @@ describe("Utility Functions", () => {
   describe("buildVariantKey", () => {
     test("builds key for two options and sorts alphabetically", () => {
       const key = buildVariantKey({ Size: "XL", Color: "Blue" });
-      expect(key).toBe("color#blue##size#xl");
+      expect(key).toBe("color__blue____size__xl");
     });
 
     test("handles single option", () => {
       const key = buildVariantKey({ Size: "XL" });
-      expect(key).toBe("size#xl");
+      expect(key).toBe("size__xl");
     });
 
     test("includes third option and normalizes values", () => {
       const key = buildVariantKey({ Size: "M", Color: "Blue", Material: "Cotton" });
-      expect(key).toBe("color#blue##material#cotton##size#m");
+      expect(key).toBe("color__blue____material__cotton____size__m");
     });
 
     test("ignores null/undefined values and returns empty for none", () => {
