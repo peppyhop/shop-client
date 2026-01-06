@@ -230,7 +230,7 @@ export function mapProductsDto<
     }));
     const optionsFull = product.options.map((option) => ({
       key: normalizeKey(option.name),
-      data: option.values,
+      data: option.values.map(normalizeKey),
       name: option.name,
       position: option.position,
       values: option.values,
@@ -385,7 +385,7 @@ export function mapProductDto<
   }));
   const optionsFull = product.options.map((option) => ({
     key: normalizeKey(option.name),
-    data: option.values,
+    data: option.values.map(normalizeKey),
     name: option.name,
     position: option.position,
     values: option.values,

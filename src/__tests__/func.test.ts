@@ -1,13 +1,13 @@
 import {
-  generateStoreSlug,
-  extractDomainWithoutSuffix,
-  genProductSlug,
-  calculateDiscount,
-  sanitizeDomain,
-  safeParseDate,
-  normalizeKey,
-  buildVariantOptionsMap,
-  buildVariantKey,
+    buildVariantKey,
+    buildVariantOptionsMap,
+    calculateDiscount,
+    extractDomainWithoutSuffix,
+    generateStoreSlug,
+    genProductSlug,
+    normalizeKey,
+    safeParseDate,
+    sanitizeDomain,
 } from "../utils/func";
 
 describe("Utility Functions", () => {
@@ -259,9 +259,20 @@ describe("Utility Functions", () => {
       expect(normalizeKey("  Mix  ed  ")).toBe("_mix_ed_");
     });
 
-    test("keeps non-space separators intact", () => {
-      expect(normalizeKey("Light-Blue")).toBe("light-blue");
-      expect(normalizeKey("Blue/Green")).toBe("blue/green");
+    test("normalizes non-alphanumeric separators to underscores", () => {
+      expect(normalizeKey("Light-Blue")).toBe("light_blue");
+      expect(normalizeKey("Blue/Green")).toBe("blue_green");
+    });
+
+    test("removes non-ascii characters", () => {
+      expect(normalizeKey("Crème Brûlée")).toBe("creme_brulee");
+      expect(normalizeKey("Größe")).toBe("grosse");
+    });
+
+    test("handles currency symbols", () => {
+      expect(normalizeKey("₹100")).toBe("_100");
+      expect(normalizeKey("€ 1,000")).toBe("_1_000");
+      expect(normalizeKey("$100")).toBe("_100");
     });
   });
 

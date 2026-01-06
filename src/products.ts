@@ -17,7 +17,7 @@ import type {
   ShopifyProduct,
   ShopifySingleProduct,
 } from "./types";
-import { formatPrice } from "./utils/func";
+import { formatPrice, normalizeKey } from "./utils/func";
 import { rateLimitedFetch } from "./utils/rate-limit";
 
 /**
@@ -1254,21 +1254,26 @@ export function createProductOperations(
             // Process product options
             if (product.options && product.options.length > 0) {
               product.options.forEach((option) => {
-                const lowercaseOptionName = option.name.toLowerCase();
-                if (!filterMap[lowercaseOptionName]) {
-                  filterMap[lowercaseOptionName] = new Set();
+                const optionKey = option.key || normalizeKey(option.name);
+                if (!optionKey) return;
+                if (!filterMap[optionKey]) {
+                  filterMap[optionKey] = new Set();
                 }
-                // Add all values from this option (converted to lowercase)
-                option.values.forEach((value) => {
+
+                const values = option.data?.length
+                  ? option.data
+                  : option.values;
+                values.forEach((value) => {
                   const trimmed = value?.trim();
-                  if (trimmed) {
-                    let set = filterMap[lowercaseOptionName];
-                    if (!set) {
-                      set = new Set<string>();
-                      filterMap[lowercaseOptionName] = set;
-                    }
-                    set.add(trimmed.toLowerCase());
+                  if (!trimmed) return;
+                  const normalized = normalizeKey(trimmed);
+                  if (!normalized) return;
+                  let set = filterMap[optionKey];
+                  if (!set) {
+                    set = new Set<string>();
+                    filterMap[optionKey] = set;
                   }
+                  set.add(normalized);
                 });
               });
             }
@@ -1277,37 +1282,40 @@ export function createProductOperations(
             product.variants.forEach((variant) => {
               if (product.options?.length) return;
               if (variant.option1) {
-                const optionName = (
+                const optionName = normalizeKey(
                   product.options?.[0]?.name || "Option 1"
-                ).toLowerCase();
+                );
                 let set1 = filterMap[optionName];
                 if (!set1) {
                   set1 = new Set<string>();
                   filterMap[optionName] = set1;
                 }
-                set1.add(variant.option1.trim().toLowerCase());
+                const normalized = normalizeKey(variant.option1.trim());
+                if (normalized) set1.add(normalized);
               }
 
               if (variant.option2) {
-                const optionName = (
+                const optionName = normalizeKey(
                   product.options?.[1]?.name || "Option 2"
-                ).toLowerCase();
+                );
                 let set2 = filterMap[optionName];
                 if (!set2) {
                   set2 = new Set<string>();
                   filterMap[optionName] = set2;
                 }
-                set2.add(variant.option2.trim().toLowerCase());
+                const normalized = normalizeKey(variant.option2.trim());
+                if (normalized) set2.add(normalized);
               }
 
               if (variant.option3) {
-                const optionName = (
+                const optionName = normalizeKey(
                   product.options?.[2]?.name || "Option 3"
-                ).toLowerCase();
+                );
                 if (!filterMap[optionName]) {
                   filterMap[optionName] = new Set();
                 }
-                filterMap[optionName].add(variant.option3.trim().toLowerCase());
+                const normalized = normalizeKey(variant.option3.trim());
+                if (normalized) filterMap[optionName].add(normalized);
               }
             });
           }
