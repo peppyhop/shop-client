@@ -154,9 +154,16 @@ export function normalizeKey(input: string): string {
   return ascii.replace(/[^a-z0-9]+/g, "_").replace(/_+/g, "_");
 }
 
+const VARIANT_NAME_VALUE_SEPARATOR = "__";
+const VARIANT_PARTS_SEPARATOR = "____";
+
+function normalizeVariantToken(input: string): string {
+  return normalizeKey(input).replace(/^_+|_+$/g, "");
+}
+
 /**
  * Build a map from normalized option combination → variant id strings.
- * Example key: `size#xl##color#blue`.
+ * Example key: `size__xl____color__blue`.
  */
 export function buildVariantOptionsMap(
   optionNames: string[],
@@ -167,22 +174,28 @@ export function buildVariantOptionsMap(
     option3: string | null;
   }>
 ): Record<string, string> {
-  const keys = optionNames.map(normalizeKey);
+  const keys = optionNames.map(normalizeVariantToken);
   const map: Record<string, string> = {};
 
   for (const v of variants) {
     const parts: string[] = [];
     if (keys[0] && v.option1)
-      parts.push(`${keys[0]}#${normalizeKey(v.option1)}`);
+      parts.push(
+        `${keys[0]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option1)}`
+      );
     if (keys[1] && v.option2)
-      parts.push(`${keys[1]}#${normalizeKey(v.option2)}`);
+      parts.push(
+        `${keys[1]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option2)}`
+      );
     if (keys[2] && v.option3)
-      parts.push(`${keys[2]}#${normalizeKey(v.option3)}`);
+      parts.push(
+        `${keys[2]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option3)}`
+      );
 
     if (parts.length > 0) {
       // Ensure deterministic alphabetical ordering of parts
       if (parts.length > 1) parts.sort();
-      const key = parts.join("##");
+      const key = parts.join(VARIANT_PARTS_SEPARATOR);
       const id = v.id.toString();
       // First-write wins: do not override if key already exists
       if (map[key] === undefined) {
@@ -213,21 +226,27 @@ export function buildVariantPriceMap(
     return 0;
   };
 
-  const keys = optionNames.map(normalizeKey);
+  const keys = optionNames.map(normalizeVariantToken);
   const map: Record<string, number> = {};
 
   for (const v of variants) {
     const parts: string[] = [];
     if (keys[0] && v.option1)
-      parts.push(`${keys[0]}#${normalizeKey(v.option1)}`);
+      parts.push(
+        `${keys[0]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option1)}`
+      );
     if (keys[1] && v.option2)
-      parts.push(`${keys[1]}#${normalizeKey(v.option2)}`);
+      parts.push(
+        `${keys[1]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option2)}`
+      );
     if (keys[2] && v.option3)
-      parts.push(`${keys[2]}#${normalizeKey(v.option3)}`);
+      parts.push(
+        `${keys[2]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option3)}`
+      );
 
     if (parts.length > 0) {
       if (parts.length > 1) parts.sort();
-      const key = parts.join("##");
+      const key = parts.join(VARIANT_PARTS_SEPARATOR);
       if (map[key] === undefined) {
         map[key] = toCents(v.price);
       }
@@ -241,9 +260,9 @@ export function buildVariantPriceMap(
  * Build a normalized variant key string from an object of option name → value.
  * - Normalizes both names and values using `normalizeKey`
  * - Sorts parts alphabetically for deterministic output
- * - Joins parts using `##` and uses `name#value` for each part
+ * - Joins parts using `____` and uses `name__value` for each part
  *
- * Example output: `color#blue##size#xl`
+ * Example output: `color__blue____size__xl`
  */
 export function buildVariantKey(
   obj: Record<string, string | null | undefined>
@@ -251,12 +270,14 @@ export function buildVariantKey(
   const parts: string[] = [];
   for (const [name, value] of Object.entries(obj)) {
     if (value) {
-      parts.push(`${normalizeKey(name)}#${normalizeKey(value)}`);
+      parts.push(
+        `${normalizeVariantToken(name)}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(value)}`
+      );
     }
   }
   if (parts.length === 0) return "";
   parts.sort((a, b) => a.localeCompare(b));
-  return parts.join("##");
+  return parts.join(VARIANT_PARTS_SEPARATOR);
 }
 
 /**

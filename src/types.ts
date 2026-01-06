@@ -431,7 +431,7 @@ export type Product = {
   url: string;
   requiresSellingPlan?: boolean | null;
   sellingPlanGroups?: unknown;
-  variantOptionsMap: Record<string, string>; // Keys formatted as name#value parts joined by '##' (alphabetically sorted), e.g., "color#blue##size#xl"
+  variantOptionsMap: Record<string, string>; // Keys formatted as name__value parts joined by '____' (alphabetically sorted), e.g., "color__blue____size__xl"
   variantPriceMap: Record<string, number>;
   enriched_content?: string;
 };
