@@ -134,7 +134,24 @@ export function safeParseDate(input?: string | null): Date | undefined {
  * Normalize an option name or value to a lowercase, underscore-separated key.
  */
 export function normalizeKey(input: string): string {
-  return input.toLowerCase().replace(/\s+/g, "_");
+  const ascii = input
+    .normalize("NFKD")
+    .replace(/\p{Sc}+/gu, " ")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/ß/g, "ss")
+    .replace(/æ/g, "ae")
+    .replace(/œ/g, "oe")
+    .replace(/ø/g, "o")
+    .replace(/ð/g, "d")
+    .replace(/þ/g, "th")
+    .replace(/đ/g, "d")
+    .replace(/ħ/g, "h")
+    .replace(/ı/g, "i")
+    .replace(/ł/g, "l")
+    .replace(/[^\u0020-\u007e]/g, "");
+
+  return ascii.replace(/[^a-z0-9]+/g, "_").replace(/_+/g, "_");
 }
 
 /**
