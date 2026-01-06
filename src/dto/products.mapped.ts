@@ -13,6 +13,7 @@ import type {
 } from "../types";
 import {
   buildVariantOptionsMap,
+  buildVariantPriceMap,
   calculateDiscount,
   genProductSlug,
   normalizeKey,
@@ -173,6 +174,7 @@ export function mapProductsDto<
       optionNames,
       product.variants
     );
+    const variantPriceMap = buildVariantPriceMap(optionNames, product.variants);
     const mappedVariants = mapVariants(product);
 
     const priceValues = mappedVariants
@@ -255,6 +257,7 @@ export function mapProductsDto<
           compareAtPriceFormatted: ctx.formatPrice(compareAtMin),
         },
         variantOptionsMap,
+        variantPriceMap,
         url,
         slug,
         platformId: product.id.toString(),
@@ -290,6 +293,7 @@ export function mapProductsDto<
         compareAtPriceFormatted: ctx.formatPrice(compareAtMin),
       },
       variantOptionsMap,
+      variantPriceMap,
       bodyHtml: product.body_html || null,
       active: true,
       productType: product.product_type || null,
@@ -339,6 +343,7 @@ export function mapProductDto<
     optionNames,
     product.variants
   );
+  const variantPriceMap = buildVariantPriceMap(optionNames, product.variants);
 
   const slug = genProductSlug({
     handle: product.handle,
@@ -404,6 +409,7 @@ export function mapProductDto<
         compareAtPriceFormatted: ctx.formatPrice(product.compare_at_price || 0),
       },
       variantOptionsMap,
+      variantPriceMap,
       url,
       slug,
       platformId: product.id.toString(),
@@ -439,6 +445,7 @@ export function mapProductDto<
       compareAtPriceFormatted: ctx.formatPrice(product.compare_at_price || 0),
     },
     variantOptionsMap,
+    variantPriceMap,
     bodyHtml: product.description || null,
     active: true,
     productType: product.type || null,

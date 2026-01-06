@@ -385,7 +385,11 @@ export class ShopClient {
       }
 
       const data: { products: ShopifyProduct[] } = await response.json();
-      return this.productsDto<C, I, O>(data.products, {
+      const rawProducts = Array.isArray(data.products) ? data.products : [];
+      const filteredRawProducts = rawProducts.filter(
+        (p) => !this.isGiftCardProductType((p as any).product_type)
+      );
+      return this.productsDto<C, I, O>(filteredRawProducts, {
         columns:
           options?.columns ??
           (this.productColumns as unknown as ProductColumnsConfig<C, I, O>),
@@ -477,7 +481,11 @@ export class ShopClient {
       }
 
       const data: { products: ShopifyProduct[] } = await response.json();
-      return this.productsDto<C, I, O>(data.products, {
+      const rawProducts = Array.isArray(data.products) ? data.products : [];
+      const filteredRawProducts = rawProducts.filter(
+        (p) => !this.isGiftCardProductType((p as any).product_type)
+      );
+      return this.productsDto<C, I, O>(filteredRawProducts, {
         columns:
           options?.columns ??
           (this.productColumns as unknown as ProductColumnsConfig<C, I, O>),
@@ -489,6 +497,14 @@ export class ShopClient {
         `${this.baseUrl}collections/${collectionHandle}/products.json`
       );
     }
+  }
+
+  private isGiftCardProductType(value: unknown): boolean {
+    if (typeof value !== "string") return false;
+    const s = value.trim().toLowerCase();
+    if (!s) return false;
+    if (s === "gift card" || s === "giftcard") return true;
+    return s.includes("gift card") || s.includes("giftcard");
   }
 
   /**
@@ -823,6 +839,7 @@ export type {
 export { detectShopCountry } from "./utils/detect-country";
 // Export utility functions
 export {
+  buildVariantKey,
   calculateDiscount,
   extractDomainWithoutSuffix,
   generateStoreSlug,

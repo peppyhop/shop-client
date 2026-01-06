@@ -97,6 +97,10 @@ describe("variantOptionsMap in product DTOs", () => {
       "color#blue##size#xl": "1",
       "color#red##size#xl": "2",
     });
+    expect(mapped.variantPriceMap).toEqual({
+      "color#blue##size#xl": 10000,
+      "color#red##size#xl": 11000,
+    });
     expect(mapped.variantImages).toEqual({
       "1": ["https://example.com/img.jpg"],
     });
@@ -189,6 +193,9 @@ describe("variantOptionsMap in product DTOs", () => {
     const mapped = shop.productDto(product);
     expect(mapped.variantOptionsMap).toEqual({
       "color#blue##material#cotton##size#m": "101",
+    });
+    expect(mapped.variantPriceMap).toEqual({
+      "color#blue##material#cotton##size#m": 10000,
     });
     expect(mapped.variantImages).toEqual({
       "101": ["https://example.com/variant.jpg"],
