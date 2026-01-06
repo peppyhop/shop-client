@@ -1,3 +1,9 @@
+## [3.26.0](https://github.com/peppyhop/shop-client/compare/v3.25.0...v3.26.0) (2026-01-06)
+
+### Features
+
+* **normalization:** improve key normalization for product options ([#47](https://github.com/peppyhop/shop-client/issues/47)) ([10f3e89](https://github.com/peppyhop/shop-client/commit/10f3e89b0b3cb0216438754baff1e88ec604b479))
+
 ## [3.25.0](https://github.com/peppyhop/shop-client/compare/v3.24.0...v3.25.0) (2026-01-06)
 
 ### Features
