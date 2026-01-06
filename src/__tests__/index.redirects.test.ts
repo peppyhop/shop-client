@@ -47,7 +47,7 @@ describe("Handle redirect resolution", () => {
             compare_at_price_varies: false,
             options: [{ name: "Size", position: 1, values: ["One"] }],
             description: "desc",
-            type: "Type",
+            type: "Gift Card",
             tags: ["t"],
             vendor: "Vendor",
             featured_image: "https://cdn.example.com/p.jpg",
@@ -77,6 +77,9 @@ describe("Handle redirect resolution", () => {
             images: ["https://cdn.example.com/p.jpg"],
             published_at: "2024-01-01T00:00:00Z",
             url: `${baseUrl}products/new-handle`,
+            media: [],
+            requires_selling_plan: false,
+            selling_plan_groups: [],
           }),
         } as any;
       }
@@ -148,9 +151,7 @@ describe("Handle redirect resolution", () => {
     const product = await shop.products.find("old-handle", {
       columns: { mode: "full", images: "full", options: "full" },
     });
-    expect(product).not.toBeNull();
-    if (!product) return;
-    expect((product as any).handle).toBe("new-handle");
+    expect(product).toBeNull();
 
     // Ensure underlying JSON was fetched at new-handle
     const fetchMock = global.fetch as unknown as jest.Mock;

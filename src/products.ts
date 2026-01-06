@@ -314,6 +314,14 @@ export function createProductOperations(
     };
   };
 
+  const isGiftCardType = (value: unknown): boolean => {
+    if (typeof value !== "string") return false;
+    const s = value.trim().toLowerCase();
+    if (!s) return false;
+    if (s === "gift card" || s === "giftcard") return true;
+    return s.includes("gift card") || s.includes("giftcard");
+  };
+
   async function allInternal<
     C extends ProductColumnsMode,
     I extends ProductImagesMode,
@@ -330,18 +338,25 @@ export function createProductOperations(
       let currentPage = 1;
 
       while (true) {
-        const products = await fetchProducts<C, I, O>(currentPage, limit, {
-          columns,
+        const url = `${baseUrl}products.json?page=${currentPage}&limit=${limit}`;
+        const response = await rateLimitedFetch(url, {
+          rateLimitClass: "products:list",
         });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = (await response.json()) as { products: ShopifyProduct[] };
+        const rawProducts = Array.isArray(data.products) ? data.products : [];
+        const filteredRawProducts = rawProducts.filter(
+          (p) => !isGiftCardType(p.product_type)
+        );
+        const normalized =
+          productsDto<C, I, O>(filteredRawProducts, { columns }) || [];
+        allProducts.push(...normalized);
 
-        if (!products || products.length === 0 || products.length < limit) {
-          if (products && products.length > 0) {
-            allProducts.push(...products);
-          }
+        if (rawProducts.length === 0 || rawProducts.length < limit) {
           break;
         }
-
-        allProducts.push(...products);
         currentPage++;
       }
       return allProducts;
@@ -385,10 +400,14 @@ export function createProductOperations(
       const data = (await response.json()) as {
         products: ShopifyProduct[];
       };
-      if (data.products.length === 0) {
+      const rawProducts = Array.isArray(data.products) ? data.products : [];
+      const filteredRawProducts = rawProducts.filter(
+        (p) => !isGiftCardType(p.product_type)
+      );
+      if (rawProducts.length === 0) {
         return [];
       }
-      const normalized = productsDto<C, I, O>(data.products, {
+      const normalized = productsDto<C, I, O>(filteredRawProducts, {
         columns,
       });
       return maybeOverrideProductsCurrency(
@@ -483,6 +502,14 @@ export function createProductOperations(
       }
 
       const product = (await response.json()) as ShopifySingleProduct;
+      if (isGiftCardType((product as any).type)) {
+        setCached(cacheKey, null);
+        if (finalHandle !== sanitizedHandle) {
+          const finalKey = `${finalHandle}|${columns.mode}|${columns.images}|${columns.options}`;
+          setCached(finalKey, null);
+        }
+        return null;
+      }
       const productData = productDto<C, I, O>(product, { columns });
 
       setCached(cacheKey, productData);
@@ -563,7 +590,7 @@ export function createProductOperations(
     const data = (await resp.json()) as ShopifyPredictiveProductSearch;
     const raw = data?.resources?.results?.products ?? [];
     const handles = raw
-      .filter((p) => p.available !== false)
+      .filter((p) => p.available !== false && !isGiftCardType((p as any).type))
       .map((p) => p.handle)
       .filter((h) => typeof h === "string" && h.length > 0)
       .slice(0, limit);
@@ -623,7 +650,10 @@ export function createProductOperations(
       : isRecord(data) && Array.isArray(data.products)
         ? (data.products as ShopifyProduct[])
         : [];
-    const normalized = productsDto<C, I, O>(productsArray, { columns }) || [];
+    const filtered = productsArray.filter(
+      (p) => !isGiftCardType((p as any).product_type)
+    );
+    const normalized = productsDto<C, I, O>(filtered, { columns }) || [];
     return maybeOverrideProductsCurrency<C, I, O>(normalized, options.currency);
   }
 
@@ -742,12 +772,26 @@ export function createProductOperations(
       const raw = parsed.shopify;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         if ("body_html" in raw) {
+          if (isGiftCardType((raw as any).product_type)) {
+            return {
+              enrichment: parsed.enrichment,
+              cache: parsed.cache,
+              product: mappedProduct,
+            };
+          }
           const mapped = productsDto<C, I, O>([raw as ShopifyProduct], {
             columns,
           });
           const first = Array.isArray(mapped) ? mapped[0] : null;
           if (first) mappedProduct = first;
         } else if ("description" in raw) {
+          if (isGiftCardType((raw as any).type)) {
+            return {
+              enrichment: parsed.enrichment,
+              cache: parsed.cache,
+              product: mappedProduct,
+            };
+          }
           mappedProduct = productDto<C, I, O>(raw as ShopifySingleProduct, {
             columns,
           });

@@ -83,6 +83,32 @@ describe("products.predictiveSearch hides unavailable and fetches via find", () 
                     compare_at_price_max: 0,
                     compare_at_price_varies: false,
                   },
+                  {
+                    id: 3,
+                    handle: "gift-card",
+                    title: "Gift Card",
+                    body: "gift",
+                    created_at: "2024-01-01T00:00:00Z",
+                    updated_at: "2024-01-01T00:00:00Z",
+                    vendor: "Vendor",
+                    tags: [],
+                    options: [],
+                    variants: [],
+                    images: [],
+                    featured_image: null,
+                    url: `${baseUrl}products/gift-card`,
+                    type: "Gift Card",
+                    published_at: "2024-01-01T00:00:00Z",
+                    available: true,
+                    price: 1000,
+                    price_min: 1000,
+                    price_max: 1000,
+                    price_varies: false,
+                    compare_at_price: 0,
+                    compare_at_price_min: 0,
+                    compare_at_price_max: 0,
+                    compare_at_price_varies: false,
+                  },
                 ],
               },
             },
@@ -150,5 +176,11 @@ describe("products.predictiveSearch hides unavailable and fetches via find", () 
     const first = results[0] as any;
     expect(first.handle).toBe("available-prod");
     expect(first.currency).toBe("USD");
+
+    const fetchMock = global.fetch as unknown as jest.Mock;
+    const calls = (fetchMock.mock.calls as unknown as Array<any>).map((c) =>
+      typeof c[0] === "string" ? c[0] : c[0]?.url
+    );
+    expect(calls).not.toContain(`${baseUrl}products/gift-card.js`);
   });
 });

@@ -13,14 +13,19 @@ jest.mock("../utils/detect-country", () => ({
 describe("products.recommendations", () => {
   const baseUrl = "https://examplestore.com/";
 
-  function makeProduct(id: number, handle: string, title: string): ShopifyProduct {
+  function makeProduct(
+    id: number,
+    handle: string,
+    title: string,
+    productType = "Type"
+  ): ShopifyProduct {
     return {
       id,
       handle,
       title,
       body_html: "<p>Body</p>",
       published_at: "2024-01-01T00:00:00Z",
-      product_type: "Type",
+      product_type: productType,
       created_at: "2024-01-01T00:00:00Z",
       updated_at: "2024-01-01T00:00:00Z",
       vendor: "Vendor",
@@ -75,7 +80,10 @@ describe("products.recommendations", () => {
       if (url.startsWith(`${baseUrl}en/recommendations/products.json`)) {
         return {
           ok: true,
-          json: async () => [makeProduct(1, "prod-1", "Product 1"), makeProduct(2, "prod-2", "Product 2")],
+          json: async () => [
+            makeProduct(1, "prod-1", "Product 1"),
+            makeProduct(2, "gift-card", "Gift Card", "Gift Card"),
+          ],
         } as any;
       }
       return { ok: false, status: 404, statusText: "Not Found" } as any;
@@ -94,7 +102,7 @@ describe("products.recommendations", () => {
     });
     expect(results).toBeDefined();
     if (!results) return;
-    expect(results.length).toBe(2);
+    expect(results.length).toBe(1);
     for (const p of results) {
       const prod = p as any;
       expect(prod.handle).toMatch(/^prod-/);

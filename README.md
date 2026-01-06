@@ -351,6 +351,8 @@ const storeInfo = await shop.getInfo();
 
 ### Products
 
+- Gift cards are excluded from product responses. Any product whose `product_type` / `type` contains `"gift card"` will be skipped (and `products.find()` returns `null` for gift cards).
+
 #### `products.all()`
 
 Fetches all products from the store with automatic pagination handling.
@@ -591,6 +593,8 @@ const collectionsPage = await shop.collections.paginated({
 **Returns:** `Collection[]` - Array of collections for the specified page
 
 ### Collection Products
+
+- Gift cards are excluded from collection product responses (same rules as `Products`).
 
 #### `collections.products.all(handle)`
 
@@ -924,7 +928,9 @@ type Product = {
   sellingPlanGroups?: unknown;
   // Keys formatted as name#value parts joined by '##' (alphabetically sorted), e.g., "color#blue##size#xl"
   variantOptionsMap: Record<string, string>;
+  variantPriceMap: Record<string, number>;
 };
+```
 
 #### Date Handling
 
@@ -934,9 +940,19 @@ type Product = {
 #### Variant Options Map
 
 - Each product includes `variantOptionsMap: Record<string, string>` when variants are present.
+- Each product includes `variantPriceMap: Record<string, number>` using the same keys; values are prices in cents.
 - Keys are composed of normalized option name/value pairs in the form `name#value`, joined by `##` and sorted alphabetically for stability.
 - Example: `{ "color#blue##size#xl": "123", "color#red##size#m": "456" }`.
 - Normalization uses `normalizeKey` (lowercases; spaces → `_`; non-space separators like `-` remain intact).
+
+Generate keys using `buildVariantKey` (exported from the main entrypoint):
+
+```typescript
+import { buildVariantKey } from "shop-client";
+
+const key = buildVariantKey({ Size: "XL", Color: "Blue" }); // "color#blue##size#xl"
+const variantId = product.variantOptionsMap[key];
+const priceInCents = product.variantPriceMap[key];
 ```
 
 ### ProductVariant
