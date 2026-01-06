@@ -1,3 +1,9 @@
+## [3.25.0](https://github.com/peppyhop/shop-client/compare/v3.24.0...v3.25.0) (2026-01-06)
+
+### Features
+
+* **products:** add variant price map and gift card filtering ([#46](https://github.com/peppyhop/shop-client/issues/46)) ([f274f6f](https://github.com/peppyhop/shop-client/commit/f274f6fdb5868ae4d2b8293aa336e9af83f12811))
+
 ## [3.24.0](https://github.com/peppyhop/shop-client/compare/v3.23.0...v3.24.0) (2026-01-05)
 
 ### Features
