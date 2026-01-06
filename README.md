@@ -10,6 +10,7 @@
 
 - [Installation](#-installation)
 - [Quick Start](#-quick-start)
+- [Effect Usage](#effect-usage)
 - [Store Info Caching & Concurrency](#store-info-caching--concurrency)
 - [Browser Usage](#browser-usage)
 - [Server/Edge Usage](#serveredge-usage)
@@ -120,6 +121,59 @@ const products = await shop.products.all();
 
 // Find specific product
 const product = await shop.products.find("product-handle");
+```
+
+## Effect Usage
+
+If your app uses `effect`, use the Effect wrapper export to avoid `async/await` in your business logic and to get typed errors, retries, and timeouts.
+
+```ts
+import { Effect } from "effect";
+import {
+  ShopClientTag,
+  classifyProductEffect,
+  configureRateLimitEffect,
+  detectShopCountryEffect,
+  generateSEOContentEffect,
+  shopClientLayer,
+} from "shop-client/effect";
+
+await Effect.runPromise(
+  configureRateLimitEffect({
+    enabled: true,
+    maxRequestsPerInterval: 60,
+    intervalMs: 60_000,
+    maxConcurrency: 4,
+  })
+);
+
+const program = Effect.gen(function* () {
+  const shop = yield* ShopClientTag;
+
+  const info = yield* shop.getInfo();
+  const country = yield* detectShopCountryEffect("https://exampleshop.com");
+  const product = yield* shop.products.find("product-handle", undefined, {
+    timeoutMs: 7_000,
+    retry: { maxRetries: 2, baseDelayMs: 300 },
+  });
+  const classification = yield* classifyProductEffect(
+    "Men's cotton crew neck t-shirt with classic fit.",
+    { apiKey: "OPENROUTER_API_KEY" },
+    { timeoutMs: 15_000, retry: { maxRetries: 1, baseDelayMs: 500 } }
+  );
+  const seo = yield* generateSEOContentEffect(
+    "Product content to generate SEO for",
+    { apiKey: "OPENROUTER_API_KEY" }
+  );
+
+  return { info, country, product, classification, seo };
+});
+
+const runnable = program.pipe(
+  Effect.provide(shopClientLayer("https://exampleshop.com", { cacheTTL: 60_000 }))
+);
+
+const result = await Effect.runPromise(runnable);
 ```
 
 ## Browser Usage

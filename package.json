@@ -10,6 +10,10 @@
       "import": "./dist/index.mjs",
       "types": "./dist/index.d.ts"
     },
+    "./effect": {
+      "import": "./dist/effect.mjs",
+      "types": "./dist/effect.d.ts"
+    },
     "./enrich": {
       "import": "./dist/ai/enrich.mjs",
       "types": "./dist/ai/enrich.d.ts"
@@ -107,6 +111,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "effect": "^3.19.14",
     "remeda": "^2.32.0",
     "tldts": "^7.0.7",
     "turndown": "^7.2.2",
