@@ -1,3 +1,9 @@
+## [3.27.0](https://github.com/peppyhop/shop-client/compare/v3.26.1...v3.27.0) (2026-01-07)
+
+### Features
+
+* **products:** add productType field and EnhancedProductWorkerResponse type ([#49](https://github.com/peppyhop/shop-client/issues/49)) ([b0a0aab](https://github.com/peppyhop/shop-client/commit/b0a0aabb8a799fc5aeb136557be183a0b264be91))
+
 ## [3.26.1](https://github.com/peppyhop/shop-client/compare/v3.26.0...v3.26.1) (2026-01-06)
 
 ## [3.26.0](https://github.com/peppyhop/shop-client/compare/v3.25.0...v3.26.0) (2026-01-06)
