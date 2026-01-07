@@ -252,6 +252,7 @@ export function mapProductsDto<
         featuredImage,
         variantImages,
         available: mappedVariants.some((v) => v.available),
+        productType: product.product_type || null,
         localizedPricing: {
           priceFormatted: ctx.formatPrice(priceMin),
           compareAtPriceFormatted: ctx.formatPrice(compareAtMin),
@@ -404,6 +405,7 @@ export function mapProductDto<
       featuredImage,
       variantImages,
       available: product.available,
+      productType: product.type || null,
       localizedPricing: {
         priceFormatted: ctx.formatPrice(product.price),
         compareAtPriceFormatted: ctx.formatPrice(product.compare_at_price || 0),

@@ -4,6 +4,7 @@ import type { ShopInfo } from "./store";
 import type {
   CurrencyCode,
   EnhancedProductResponse,
+  EnhancedProductWorkerResponse,
   OpenRouterConfig,
   Product,
   ProductClassification,
@@ -762,11 +763,7 @@ export function createProductOperations(
     if (!("shopify" in o) || !("enrichment" in o) || !("cache" in o)) {
       throw new Error("Invalid enhanced product response");
     }
-    const parsed = data as {
-      shopify: unknown;
-      enrichment: EnhancedProductResponse["enrichment"];
-      cache: EnhancedProductResponse["cache"];
-    };
+    const parsed = data as EnhancedProductWorkerResponse;
     let mappedProduct: ProductResult<C, I, O> = baseProduct;
     try {
       const raw = parsed.shopify;

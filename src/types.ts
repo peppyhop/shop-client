@@ -449,6 +449,7 @@ export type MinimalProduct = {
   featuredImage: string | null;
   variantImages: Record<string, string[]>;
   available: boolean;
+  productType: string | null;
   localizedPricing: Pick<
     LocalizedPricing,
     "priceFormatted" | "compareAtPriceFormatted"
@@ -746,6 +747,98 @@ export type EnhancedProductCanonical = {
   images: EnhancedProductImage[];
 };
 
+export type EnhancedProductSeoMeta = {
+  charset: string;
+  "x-ua-compatible": string;
+  viewport: string;
+  description: string;
+  "og:site_name": string;
+  "og:url": string;
+  "og:title": string;
+  "og:type": string;
+  "og:description": string;
+  "og:image": string;
+  "og:image:secure_url": string;
+  "og:image:width": string;
+  "og:image:height": string;
+  "og:price:amount": string;
+  "og:price:currency": string;
+  "twitter:card": string;
+  "twitter:title": string;
+  "twitter:description": string;
+  "shopify-digital-wallet": string;
+};
+
+export type EnhancedProductSeoOpenGraph = {
+  "og:site_name": string;
+  "og:url": string;
+  "og:title": string;
+  "og:type": string;
+  "og:description": string;
+  "og:image": string;
+  "og:image:secure_url": string;
+  "og:image:width": string;
+  "og:image:height": string;
+  "og:price:amount": string;
+  "og:price:currency": string;
+};
+
+export type EnhancedProductSeoTwitter = {
+  "twitter:card": string;
+  "twitter:title": string;
+  "twitter:description": string;
+};
+
+export type EnhancedProductSeoJsonLdBrand = {
+  "@type": string;
+  name: string;
+};
+
+export type EnhancedProductSeoJsonLdOffers = {
+  "@id": string;
+  "@type": string;
+  availability: string;
+  price: string;
+  priceCurrency: string;
+  url: string;
+};
+
+export type EnhancedProductSeoJsonLdHasVariant = {
+  "@id": string;
+  "@type": string;
+  image: string;
+  name: string;
+  offers: EnhancedProductSeoJsonLdOffers;
+};
+
+export type EnhancedProductSeoJsonLd = {
+  "@context": string;
+  "@type": string;
+  name: string;
+  logo?: string;
+  sameAs?: string[];
+  url: string;
+  "@id"?: string;
+  brand?: EnhancedProductSeoJsonLdBrand;
+  category?: string;
+  description?: string;
+  hasVariant?: EnhancedProductSeoJsonLdHasVariant[];
+  productGroupID?: string;
+};
+
+export type EnhancedProductSeo = {
+  title: string;
+  description: string;
+  canonical: string;
+  meta: EnhancedProductSeoMeta;
+  openGraph: EnhancedProductSeoOpenGraph;
+  twitter: EnhancedProductSeoTwitter;
+  jsonLd: EnhancedProductSeoJsonLd[];
+  jsonLdRaw: unknown[];
+  productJsonLd: unknown[];
+  missing: string[];
+};
+
 /**
  * The full enrichment result containing both structured and markdown formats.
  */
@@ -754,6 +847,7 @@ export type EnhancedProductEnrichment = {
   canonical: EnhancedProductCanonical;
   /** The generated markdown content. */
   markdown: string;
+  seo?: EnhancedProductSeo;
 };
 
 /**
@@ -765,6 +859,12 @@ export type EnhancedProductResponse<TProduct = Product> = {
   /** The AI-enriched content. */
   enrichment: EnhancedProductEnrichment;
   /** Cache status of the response (e.g., 'hit', 'miss'). */
+  cache: string;
+};
+
+export type EnhancedProductWorkerResponse = {
+  shopify: ShopifyProduct | ShopifySingleProduct;
+  enrichment: EnhancedProductEnrichment;
   cache: string;
 };
 
