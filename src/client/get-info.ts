@@ -1,5 +1,6 @@
 import { unique } from "remeda";
 import type { ShopInfo } from "../store";
+import type { EnhancedProductSeo } from "../types";
 import { detectShopCountry } from "../utils/detect-country";
 import {
   extractDomainWithoutSuffix,
@@ -7,6 +8,169 @@ import {
   sanitizeDomain,
 } from "../utils/func";
 import { rateLimitedFetch } from "../utils/rate-limit";
+
+function parseSeoFromHtml(html: string, url: string): EnhancedProductSeo {
+  const esc = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const getMeta = (key: string) => {
+    const k = esc(key);
+    const regex = new RegExp(
+      `<meta[^>]*(?:name|property)=["']${k}["'][^>]*content=["'](.*?)["']`,
+      "i"
+    );
+    const match = html.match(regex);
+    return match?.[1] ?? "";
+  };
+  const titleTag = () => {
+    const match = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    return match?.[1]?.trim() ?? "";
+  };
+  const canonicalTag = () => {
+    const match = html.match(
+      /<link[^>]*rel=["']canonical["'][^>]*href=["'](.*?)["']/i
+    );
+    return match?.[1] ?? "";
+  };
+  const charsetTag = () => {
+    const match = html.match(/<meta[^>]*charset=["']?([^"'>\s]+)["']?/i);
+    return match?.[1] ?? "";
+  };
+  const xuaTag = () => {
+    const match = html.match(
+      /<meta[^>]*http-equiv=["']X-UA-Compatible["'][^>]*content=["'](.*?)["']/i
+    );
+    return match?.[1] ?? "";
+  };
+
+  const canonical = canonicalTag() || url;
+  const description = getMeta("description") || getMeta("og:description");
+  const title = getMeta("og:title") || getMeta("twitter:title") || titleTag();
+
+  const meta = {
+    charset: charsetTag(),
+    "x-ua-compatible": xuaTag(),
+    viewport: getMeta("viewport"),
+    description,
+    "og:site_name": getMeta("og:site_name"),
+    "og:url": getMeta("og:url") || canonical,
+    "og:title": getMeta("og:title") || title,
+    "og:type": getMeta("og:type"),
+    "og:description": getMeta("og:description") || description,
+    "og:image": getMeta("og:image"),
+    "og:image:secure_url": getMeta("og:image:secure_url"),
+    "og:image:width": getMeta("og:image:width"),
+    "og:image:height": getMeta("og:image:height"),
+    "og:price:amount": getMeta("og:price:amount"),
+    "og:price:currency": getMeta("og:price:currency"),
+    "twitter:card": getMeta("twitter:card"),
+    "twitter:title": getMeta("twitter:title") || title,
+    "twitter:description": getMeta("twitter:description") || description,
+    "shopify-digital-wallet": getMeta("shopify-digital-wallet"),
+  };
+
+  const openGraph = {
+    "og:site_name": meta["og:site_name"],
+    "og:url": meta["og:url"],
+    "og:title": meta["og:title"],
+    "og:type": meta["og:type"],
+    "og:description": meta["og:description"],
+    "og:image": meta["og:image"],
+    "og:image:secure_url": meta["og:image:secure_url"],
+    "og:image:width": meta["og:image:width"],
+    "og:image:height": meta["og:image:height"],
+    "og:price:amount": meta["og:price:amount"],
+    "og:price:currency": meta["og:price:currency"],
+  };
+
+  const twitter = {
+    "twitter:card": meta["twitter:card"],
+    "twitter:title": meta["twitter:title"],
+    "twitter:description": meta["twitter:description"],
+  };
+
+  const jsonLdRaw =
+    html
+      .match(
+        /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g
+      )
+      ?.map((match) => match.replace(/^.*?>/, "").replace(/<\/script>$/i, ""))
+      ?.map((json) => {
+        try {
+          return JSON.parse(json);
+        } catch {
+          return undefined;
+        }
+      })
+      .filter((x) => x !== undefined) ?? [];
+
+  const jsonLd = jsonLdRaw
+    .filter((e) => e && typeof e === "object")
+    .map((e: any) => ({
+      "@context": e?.["@context"] ?? "",
+      "@type": e?.["@type"] ?? "",
+      name: e?.name ?? "",
+      logo: e?.logo,
+      sameAs: e?.sameAs,
+      url: e?.url ?? "",
+      "@id": e?.["@id"],
+      brand: e?.brand,
+      category: e?.category,
+      description: e?.description,
+      hasVariant: e?.hasVariant,
+      productGroupID: e?.productGroupID,
+    }))
+    .filter((e) => e["@context"] && e["@type"]);
+
+  const productJsonLd = jsonLdRaw.filter((e: any) => {
+    const t = e?.["@type"];
+    if (!t) return false;
+    if (Array.isArray(t)) return t.includes("Product");
+    return t === "Product";
+  });
+
+  const requiredKeys = [
+    "description",
+    "og:site_name",
+    "og:url",
+    "og:title",
+    "og:type",
+    "og:description",
+    "og:image",
+    "twitter:card",
+    "twitter:title",
+    "twitter:description",
+    "shopify-digital-wallet",
+  ];
+  const missing = requiredKeys.filter((k) => (meta as any)[k] === "");
+
+  return {
+    title,
+    description,
+    canonical,
+    meta,
+    openGraph,
+    twitter,
+    jsonLd,
+    jsonLdRaw,
+    productJsonLd,
+    missing,
+  };
+}
+
+export async function getSeoForUrl(args: {
+  url: string;
+  rateLimitClass: string;
+  timeoutMs?: number;
+}): Promise<EnhancedProductSeo> {
+  const response = await rateLimitedFetch(args.url, {
+    rateLimitClass: args.rateLimitClass,
+    timeoutMs: args.timeoutMs ?? 7000,
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  const html = await response.text();
+  return parseSeoFromHtml(html, response.url || args.url);
+}
 
 type Args = {
   baseUrl: string;
@@ -244,6 +408,8 @@ export async function getInfoForShop(
     return out;
   };
 
+  const seo = parseSeoFromHtml(html, baseUrl);
+
   const info: ShopInfo = {
     name: name || slug,
     domain: sanitizeDomain(baseUrl),
@@ -267,6 +433,7 @@ export async function getInfoForShop(
           (match) => match?.split(">")[1]?.replace(/<\/script/g, "") || null
         )
         ?.map((json) => (json ? JSON.parse(json) : null)) || [],
+    seo,
     techProvider: {
       name: shopifyWalletId ? "shopify" : "",
       walletId: shopifyWalletId,

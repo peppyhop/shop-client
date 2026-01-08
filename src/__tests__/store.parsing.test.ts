@@ -9,8 +9,11 @@ describe("ShopOperations.info parsing", () => {
 
   const html = `
     <meta name="og:site_name" content="Example Store">
+    <meta property="og:title" content="Example OG Title">
     <meta name="description" content="An example description">
+    <meta name="twitter:description" content="An example twitter description">
     <meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog">
+    <link rel="canonical" href="https://examplestore.com/">
     <a href="//instagram.com/example">Instagram</a>
     <a href="https://www.twitter.com/example">Twitter</a>
     <a href="https://www.linkedin.com/company/example/">LinkedIn</a>
@@ -69,5 +72,27 @@ describe("ShopOperations.info parsing", () => {
     expect(info.contactLinks.tel).toBe("+1234567890");
     expect(info.contactLinks.email).toBe("support@example.com");
     expect(info.contactLinks.contactPage).toBe("/pages/contact");
+  });
+
+  test("returns seo parsed from store homepage html", async () => {
+    const ops = createShopOperations({
+      baseUrl,
+      storeDomain: baseUrl,
+      validateProductExists: async () => true,
+      validateCollectionExists: async () => true,
+      validateLinksInBatches: async <T>(items: T[]) => items,
+      handleFetchError: (error: unknown) => {
+        throw error as Error;
+      },
+    });
+
+    const seo = await ops.getSeo();
+    expect(seo).toBeDefined();
+    expect(seo.title).toBe("Example OG Title");
+    expect(seo.description).toBe("An example description");
+    expect(seo.canonical).toBe("https://examplestore.com/");
+    expect(seo.meta["shopify-digital-wallet"]).toBe(
+      "/123456/digital_wallets/dialog"
+    );
   });
 });
