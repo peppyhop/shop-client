@@ -1,3 +1,9 @@
+## [3.29.0](https://github.com/peppyhop/shop-client/compare/v3.28.0...v3.29.0) (2026-01-08)
+
+### Features
+
+* **products:** add variant SKU mapping support ([#51](https://github.com/peppyhop/shop-client/issues/51)) ([8bfb9bd](https://github.com/peppyhop/shop-client/commit/8bfb9bd5244adc8c15fc99e37737317110a7156c))
+
 ## [3.28.0](https://github.com/peppyhop/shop-client/compare/v3.27.0...v3.28.0) (2026-01-08)
 
 ### Features
