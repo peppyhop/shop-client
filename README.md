@@ -926,9 +926,10 @@ type Product = {
   url: string;
   requiresSellingPlan?: boolean | null;
   sellingPlanGroups?: unknown;
-  // Keys formatted as name#value parts joined by '##' (alphabetically sorted), e.g., "color#blue##size#xl"
+  // Keys formatted as name__value parts joined by '____' (alphabetically sorted), e.g., "color__blue____size__xl"
   variantOptionsMap: Record<string, string>;
   variantPriceMap: Record<string, number>;
+  variantSkuMap: Record<string, string | null>;
 };
 ```
 
@@ -937,12 +938,13 @@ type Product = {
 - `createdAt` and `updatedAt` are parsed using a safe parser and may be `undefined` when source values are empty or invalid.
 - `publishedAt` is `Date | null` and will be `null` when unavailable or invalid.
 
-#### Variant Options Map
+#### Variant Maps
 
 - Each product includes `variantOptionsMap: Record<string, string>` when variants are present.
 - Each product includes `variantPriceMap: Record<string, number>` using the same keys; values are prices in cents.
-- Keys are composed of normalized option name/value pairs in the form `name#value`, joined by `##` and sorted alphabetically for stability.
-- Example: `{ "color#blue##size#xl": "123", "color#red##size#m": "456" }`.
+- Each product includes `variantSkuMap: Record<string, string | null>` using the same keys; values are SKUs (or `null`).
+- Keys are composed of normalized option name/value pairs in the form `name__value`, joined by `____` and sorted alphabetically for stability.
+- Example: `{ "color__blue____size__xl": "123", "color__red____size__m": "456" }`.
 - Normalization uses `normalizeKey` (lowercases; spaces → `_`; non-space separators like `-` remain intact).
 
 Generate keys using `buildVariantKey` (exported from the main entrypoint):
@@ -950,9 +952,10 @@ Generate keys using `buildVariantKey` (exported from the main entrypoint):
 ```typescript
 import { buildVariantKey } from "shop-client";
 
-const key = buildVariantKey({ Size: "XL", Color: "Blue" }); // "color#blue##size#xl"
+const key = buildVariantKey({ Size: "XL", Color: "Blue" }); // "color__blue____size__xl"
 const variantId = product.variantOptionsMap[key];
 const priceInCents = product.variantPriceMap[key];
+const sku = product.variantSkuMap[key];
 ```
 
 ### ProductVariant
