@@ -256,6 +256,46 @@ export function buildVariantPriceMap(
   return map;
 }
 
+export function buildVariantSkuMap(
+  optionNames: string[],
+  variants: Array<{
+    id: number;
+    option1: string | null;
+    option2: string | null;
+    option3: string | null;
+    sku: string | null;
+  }>
+): Record<string, string | null> {
+  const keys = optionNames.map(normalizeVariantToken);
+  const map: Record<string, string | null> = {};
+
+  for (const v of variants) {
+    const parts: string[] = [];
+    if (keys[0] && v.option1)
+      parts.push(
+        `${keys[0]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option1)}`
+      );
+    if (keys[1] && v.option2)
+      parts.push(
+        `${keys[1]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option2)}`
+      );
+    if (keys[2] && v.option3)
+      parts.push(
+        `${keys[2]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option3)}`
+      );
+
+    if (parts.length > 0) {
+      if (parts.length > 1) parts.sort();
+      const key = parts.join(VARIANT_PARTS_SEPARATOR);
+      if (map[key] === undefined) {
+        map[key] = typeof v.sku === "string" && v.sku.trim() ? v.sku : null;
+      }
+    }
+  }
+
+  return map;
+}
+
 /**
  * Build a normalized variant key string from an object of option name → value.
  * - Normalizes both names and values using `normalizeKey`

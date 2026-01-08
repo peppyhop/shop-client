@@ -433,6 +433,7 @@ export type Product = {
   sellingPlanGroups?: unknown;
   variantOptionsMap: Record<string, string>; // Keys formatted as name__value parts joined by '____' (alphabetically sorted), e.g., "color__blue____size__xl"
   variantPriceMap: Record<string, number>;
+  variantSkuMap: Record<string, string | null>;
   enriched_content?: string;
 };
 
@@ -457,6 +458,7 @@ export type MinimalProduct = {
   options: { key: string; name: string; values: string[] }[];
   variantOptionsMap: Record<string, string>;
   variantPriceMap: Record<string, number>;
+  variantSkuMap: Record<string, string | null>;
   url: string;
   slug: string;
   platformId: string;

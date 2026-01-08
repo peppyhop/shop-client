@@ -21,7 +21,7 @@ describe("variantOptionsMap in product DTOs", () => {
         option1: "XL",
         option2: "Blue",
         option3: null,
-        sku: null,
+        sku: "SKU-XL-BLUE",
         requires_shipping: false,
         taxable: true,
         position: 1,
@@ -41,7 +41,7 @@ describe("variantOptionsMap in product DTOs", () => {
         option1: "XL",
         option2: "Red",
         option3: null,
-        sku: null,
+        sku: "SKU-XL-RED",
         requires_shipping: false,
         taxable: true,
         position: 2,
@@ -101,6 +101,10 @@ describe("variantOptionsMap in product DTOs", () => {
       "color__blue____size__xl": 10000,
       "color__red____size__xl": 11000,
     });
+    expect(mapped.variantSkuMap).toEqual({
+      "color__blue____size__xl": "SKU-XL-BLUE",
+      "color__red____size__xl": "SKU-XL-RED",
+    });
     expect(mapped.variantImages).toEqual({
       "1": ["https://example.com/img.jpg"],
     });
@@ -119,7 +123,7 @@ describe("variantOptionsMap in product DTOs", () => {
         option1: "M",
         option2: "Blue",
         option3: "Cotton",
-        sku: null,
+        sku: "SKU-M-BLUE-COTTON",
         requires_shipping: false,
         taxable: true,
         position: 1,
@@ -196,6 +200,9 @@ describe("variantOptionsMap in product DTOs", () => {
     });
     expect(mapped.variantPriceMap).toEqual({
       "color__blue____material__cotton____size__m": 10000,
+    });
+    expect(mapped.variantSkuMap).toEqual({
+      "color__blue____material__cotton____size__m": "SKU-M-BLUE-COTTON",
     });
     expect(mapped.variantImages).toEqual({
       "101": ["https://example.com/variant.jpg"],
