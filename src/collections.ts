@@ -1,8 +1,10 @@
 import { filter, isNonNullish } from "remeda";
+import { getSeoForUrl } from "./client/get-info";
 import type { ShopInfo } from "./store";
 import type {
   Collection,
   CurrencyCode,
+  EnhancedProductSeo,
   ProductColumnsConfig,
   ProductColumnsMode,
   ProductImagesMode,
@@ -40,6 +42,8 @@ export interface CollectionOperations {
    * Finds a specific collection by its handle.
    */
   find(collectionHandle: string): Promise<Collection | null>;
+
+  getSeo(collectionHandle: string): Promise<EnhancedProductSeo>;
 
   /**
    * Fetches collections that are showcased/featured on the store's homepage.
@@ -398,6 +402,23 @@ export function createCollectionOperations(
         }
         throw error;
       }
+    },
+
+    getSeo: async (collectionHandle: string): Promise<EnhancedProductSeo> => {
+      if (!collectionHandle || typeof collectionHandle !== "string") {
+        throw new Error("Collection handle is required and must be a string");
+      }
+
+      const base = (collectionHandle.split("?")[0] ?? collectionHandle).trim();
+      const sanitizedHandle = base.replace(/[^a-zA-Z0-9\-_]/g, "");
+      if (!sanitizedHandle) {
+        throw new Error("Collection handle is required and must be a string");
+      }
+
+      return await getSeoForUrl({
+        url: `${baseUrl}collections/${encodeURIComponent(sanitizedHandle)}`,
+        rateLimitClass: "collections:seo",
+      });
     },
 
     /**

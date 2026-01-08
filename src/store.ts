@@ -1,7 +1,8 @@
-import { getInfoForShop } from "./client/get-info";
+import { getInfoForShop, getSeoForUrl } from "./client/get-info";
 import type {
   CountryDetectionResult,
   CurrencyCode,
+  EnhancedProductSeo,
   JsonLdEntry,
 } from "./types";
 import { rateLimitedFetch } from "./utils/rate-limit";
@@ -12,6 +13,7 @@ import { rateLimitedFetch } from "./utils/rate-limit";
  */
 export interface ShopOperations {
   info(): Promise<ShopInfo>;
+  getSeo(): Promise<EnhancedProductSeo>;
   getMetaData(): Promise<OpenGraphMeta>;
   getJsonLd(): Promise<JsonLdEntry[] | undefined>;
   getHeaderLinks(): Promise<string[]>;
@@ -40,6 +42,7 @@ export interface ShopInfo {
     collections: string[];
   };
   jsonLdData: JsonLdEntry[] | undefined;
+  seo: EnhancedProductSeo;
   techProvider: {
     name: string;
     walletId: string | undefined;
@@ -345,6 +348,16 @@ export function createShopOperations(context: {
         */
       } catch (error) {
         context.handleFetchError(error, "fetching store info", context.baseUrl);
+      }
+    },
+    getSeo: async (): Promise<EnhancedProductSeo> => {
+      try {
+        return await getSeoForUrl({
+          url: context.baseUrl,
+          rateLimitClass: "store:seo",
+        });
+      } catch (error) {
+        context.handleFetchError(error, "fetching store SEO", context.baseUrl);
       }
     },
     getMetaData: async (): Promise<OpenGraphMeta> => {

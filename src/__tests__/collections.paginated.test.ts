@@ -101,4 +101,44 @@ describe("collections.paginated and .all pagination behavior", () => {
       (global as any).fetch = originalFetch;
     }
   });
+
+  test("collections.getSeo fetches collection page and returns parsed EnhancedProductSeo", async () => {
+    const domain = "https://example.com/";
+    const handle = "c-1";
+    const seoHtml = `<!doctype html>
+      <html>
+        <head>
+          <link rel="canonical" href="${domain}collections/${handle}">
+          <meta name="description" content="Collection SEO description">
+          <meta property="og:site_name" content="Example Store">
+          <meta property="og:title" content="OG collection title">
+          <meta property="og:url" content="${domain}collections/${handle}">
+          <meta property="og:type" content="website">
+          <meta property="og:description" content="OG collection description">
+          <meta name="twitter:card" content="summary">
+          <meta name="twitter:title" content="Twitter collection title">
+          <meta name="twitter:description" content="Twitter collection description">
+          <meta name="shopify-digital-wallet" content="/123456/digital_wallets/dialog">
+        </head>
+        <body></body>
+      </html>`;
+
+    const shop = new ShopClient(domain);
+    const originalFetch = (global as any).fetch;
+    (global as any).fetch = jest.fn(async (input: any) => {
+      const url = typeof input === "string" ? input : input?.url ?? "";
+      if (url.includes(`/collections/${handle}`)) {
+        return { ok: true, url, text: async () => seoHtml } as any;
+      }
+      return { ok: false, status: 404, statusText: "Not Found" } as any;
+    });
+    try {
+      const seo = await shop.collections.getSeo(handle);
+      expect(seo.title).toBe("OG collection title");
+      expect(seo.description).toBe("Collection SEO description");
+      expect(seo.canonical).toBe(`${domain}collections/${handle}`);
+    } finally {
+      (global as any).fetch = originalFetch;
+    }
+  });
 });

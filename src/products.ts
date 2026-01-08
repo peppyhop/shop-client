@@ -1,8 +1,10 @@
 import { filter, isNonNullish } from "remeda";
 // Heavy AI enrich utilities are lazy-loaded where needed to keep base bundle light
+import { getSeoForUrl } from "./client/get-info";
 import type { ShopInfo } from "./store";
 import type {
   CurrencyCode,
+  EnhancedProductSeo,
   EnhancedProductResponse,
   EnhancedProductWorkerResponse,
   OpenRouterConfig,
@@ -143,6 +145,8 @@ export interface ProductOperations {
    * If content is provided, it is used directly to extract the main section.
    */
   infoHtml(productHandle: string, content?: string): Promise<string | null>;
+
+  getSeo(productHandle: string): Promise<EnhancedProductSeo>;
 
   /**
    * Fetches products that are showcased/featured on the store's homepage.
@@ -918,6 +922,23 @@ export function createProductOperations(
         columns: options?.columns,
       });
       return res;
+    },
+
+    getSeo: async (productHandle: string): Promise<EnhancedProductSeo> => {
+      if (!productHandle || typeof productHandle !== "string") {
+        throw new Error("Product handle is required and must be a string");
+      }
+
+      const base = (productHandle.split("?")[0] ?? productHandle).trim();
+      const sanitized = base.replace(/[^a-zA-Z0-9\-_]/g, "");
+      if (!sanitized) {
+        throw new Error("Product handle is required and must be a string");
+      }
+
+      return await getSeoForUrl({
+        url: `${baseUrl}products/${encodeURIComponent(sanitized)}`,
+        rateLimitClass: "products:seo",
+      });
     },
 
     findEnhanced: async <
