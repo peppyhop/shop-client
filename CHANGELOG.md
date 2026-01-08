@@ -1,3 +1,9 @@
+## [3.28.0](https://github.com/peppyhop/shop-client/compare/v3.27.0...v3.28.0) (2026-01-08)
+
+### Features
+
+* **seo:** add seo parsing for store, collections and products ([#50](https://github.com/peppyhop/shop-client/issues/50)) ([f24910b](https://github.com/peppyhop/shop-client/commit/f24910bfbaaeee0565951d073045dde179a6b5a6))
+
 ## [3.27.0](https://github.com/peppyhop/shop-client/compare/v3.26.1...v3.27.0) (2026-01-07)
 
 ### Features

@@ -1,6 +1,6 @@
 {
   "name": "shop-client",
-  "version": "3.27.0",
+  "version": "3.28.0",
   "type": "module",
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
