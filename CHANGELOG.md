@@ -1,3 +1,9 @@
+## [3.30.0](https://github.com/peppyhop/shop-client/compare/v3.29.0...v3.30.0) (2026-01-28)
+
+### Features
+
+* **types:** add variant availability map to product types ([#52](https://github.com/peppyhop/shop-client/issues/52)) ([7ec5822](https://github.com/peppyhop/shop-client/commit/7ec58226cf5bda5fcef28881c589ec88faec5db6))
+
 ## [3.29.0](https://github.com/peppyhop/shop-client/compare/v3.28.0...v3.29.0) (2026-01-08)
 
 ### Features
