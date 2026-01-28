@@ -930,6 +930,7 @@ type Product = {
   variantOptionsMap: Record<string, string>;
   variantPriceMap: Record<string, number>;
   variantSkuMap: Record<string, string | null>;
+  variantAvailabilityMap: Record<string, boolean>;
 };
 ```
 
@@ -943,6 +944,7 @@ type Product = {
 - Each product includes `variantOptionsMap: Record<string, string>` when variants are present.
 - Each product includes `variantPriceMap: Record<string, number>` using the same keys; values are prices in cents.
 - Each product includes `variantSkuMap: Record<string, string | null>` using the same keys; values are SKUs (or `null`).
+- Each product includes `variantAvailabilityMap: Record<string, boolean>` using the same keys; values are availability flags.
 - Keys are composed of normalized option name/value pairs in the form `name__value`, joined by `____` and sorted alphabetically for stability.
 - Example: `{ "color__blue____size__xl": "123", "color__red____size__m": "456" }`.
 - Normalization uses `normalizeKey` (lowercases; spaces → `_`; non-space separators like `-` remain intact).
@@ -956,6 +958,7 @@ const key = buildVariantKey({ Size: "XL", Color: "Blue" }); // "color__blue____s
 const variantId = product.variantOptionsMap[key];
 const priceInCents = product.variantPriceMap[key];
 const sku = product.variantSkuMap[key];
+const available = product.variantAvailabilityMap[key];
 ```
 
 ### ProductVariant

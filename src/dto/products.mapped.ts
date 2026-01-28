@@ -3,15 +3,19 @@ import type {
   Product,
   ProductColumnsConfig,
   ProductColumnsMode,
+  ProductImagesByMode,
   ProductImagesMode,
+  ProductOptionsByMode,
   ProductOptionsMode,
   ProductResult,
+  ShopifyOption,
   ShopifyProduct,
   ShopifyProductVariant,
   ShopifySingleProduct,
   ShopifySingleProductVariant,
 } from "../types";
 import {
+  buildVariantAvailabilityMap,
   buildVariantOptionsMap,
   buildVariantPriceMap,
   buildVariantSkuMap,
@@ -28,6 +32,119 @@ type Ctx = {
   normalizeImageUrl: (url: string | null | undefined) => string;
   formatPrice: (amountInCents: number) => string;
 };
+
+function toCents(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const n = Number.parseFloat(value);
+    return Number.isFinite(n) ? Math.round(n * 100) : 0;
+  }
+  return 0;
+}
+
+function buildVariantMaps(
+  optionNames: string[],
+  variants: Array<{
+    id: number;
+    option1: string | null;
+    option2: string | null;
+    option3: string | null;
+    price: string | number;
+    sku: string | null;
+    available?: boolean | null;
+  }>
+): {
+  variantOptionsMap: Record<string, string>;
+  variantPriceMap: Record<string, number>;
+  variantSkuMap: Record<string, string | null>;
+  variantAvailabilityMap: Record<string, boolean>;
+} {
+  return {
+    variantOptionsMap: buildVariantOptionsMap(optionNames, variants),
+    variantPriceMap: buildVariantPriceMap(optionNames, variants),
+    variantSkuMap: buildVariantSkuMap(optionNames, variants),
+    variantAvailabilityMap: buildVariantAvailabilityMap(optionNames, variants),
+  };
+}
+
+function buildProductUrl(
+  ctx: Ctx,
+  handle: string,
+  urlOverride?: string | null
+): string {
+  return urlOverride || `${ctx.storeDomain}/products/${handle}`;
+}
+
+function mapImagesFromShopifyProduct<I extends ProductImagesMode>(
+  product: ShopifyProduct,
+  ctx: Ctx,
+  mode: I
+): ProductImagesByMode<I> {
+  const minimal = product.images.map((img) => ({
+    src: ctx.normalizeImageUrl(img.src),
+  }));
+  const full = product.images.map((image) => ({
+    id: image.id,
+    productId: image.product_id,
+    alt: null,
+    position: image.position,
+    src: ctx.normalizeImageUrl(image.src),
+    width: image.width,
+    height: image.height,
+    mediaType: "image" as const,
+    variantIds: image.variant_ids || [],
+    createdAt: image.created_at,
+    updatedAt: image.updated_at,
+  }));
+
+  return (mode === "full" ? full : minimal) as ProductImagesByMode<I>;
+}
+
+function mapImagesFromShopifySingleProduct<I extends ProductImagesMode>(
+  product: ShopifySingleProduct,
+  ctx: Ctx,
+  mode: I
+): ProductImagesByMode<I> {
+  const images = Array.isArray(product.images) ? product.images : [];
+
+  const minimal = images.map((imageSrc) => ({
+    src: ctx.normalizeImageUrl(imageSrc),
+  }));
+  const full = images.map((imageSrc, index) => ({
+    id: index + 1,
+    productId: product.id,
+    alt: null,
+    position: index + 1,
+    src: ctx.normalizeImageUrl(imageSrc),
+    width: 0,
+    height: 0,
+    mediaType: "image" as const,
+    variantIds: [],
+    createdAt: product.created_at,
+    updatedAt: product.updated_at,
+  }));
+
+  return (mode === "full" ? full : minimal) as ProductImagesByMode<I>;
+}
+
+function mapOptions<O extends ProductOptionsMode>(
+  options: ShopifyOption[],
+  mode: O
+): ProductOptionsByMode<O> {
+  const minimal = options.map((option) => ({
+    key: normalizeKey(option.name),
+    name: option.name,
+    values: option.values,
+  }));
+  const full = options.map((option) => ({
+    key: normalizeKey(option.name),
+    data: option.values.map(normalizeKey),
+    name: option.name,
+    position: option.position,
+    values: option.values,
+  }));
+  return (mode === "full" ? full : minimal) as ProductOptionsByMode<O>;
+}
 
 function resolveColumnsConfig<
   C extends ProductColumnsMode,
@@ -46,15 +163,6 @@ function resolveColumnsConfig<
 function mapVariants(
   product: ShopifyProduct | ShopifySingleProduct
 ): NonNullable<Product["variants"]> {
-  const toCents = (value: unknown): number => {
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string") {
-      const n = Number.parseFloat(value);
-      return Number.isFinite(n) ? Math.round(n * 100) : 0;
-    }
-    return 0;
-  };
-
   const variants = product.variants ?? [];
   return (
     variants as Array<ShopifyProductVariant | ShopifySingleProductVariant>
@@ -171,12 +279,12 @@ export function mapProductsDto<
 
   const mapOne = (product: ShopifyProduct) => {
     const optionNames = product.options.map((o) => o.name);
-    const variantOptionsMap = buildVariantOptionsMap(
-      optionNames,
-      product.variants
-    );
-    const variantPriceMap = buildVariantPriceMap(optionNames, product.variants);
-    const variantSkuMap = buildVariantSkuMap(optionNames, product.variants);
+    const {
+      variantOptionsMap,
+      variantPriceMap,
+      variantSkuMap,
+      variantAvailabilityMap,
+    } = buildVariantMaps(optionNames, product.variants);
     const mappedVariants = mapVariants(product);
 
     const priceValues = mappedVariants
@@ -203,42 +311,13 @@ export function mapProductsDto<
       handle: product.handle,
       storeDomain: ctx.storeDomain,
     });
-    const url = `${ctx.storeDomain}/products/${product.handle}`;
+    const url = buildProductUrl(ctx, product.handle);
     const discount = calculateDiscount(priceMin, compareAtMin);
     const variantImages = buildVariantImagesMap(product, ctx);
 
-    const imagesMinimal = product.images.map((img) => ({
-      src: ctx.normalizeImageUrl(img.src),
-    }));
-    const imagesFull = product.images.map((image) => ({
-      id: image.id,
-      productId: image.product_id,
-      alt: null,
-      position: image.position,
-      src: ctx.normalizeImageUrl(image.src),
-      width: image.width,
-      height: image.height,
-      mediaType: "image" as const,
-      variantIds: image.variant_ids || [],
-      createdAt: image.created_at,
-      updatedAt: image.updated_at,
-    }));
-    const images = columns.images === "full" ? imagesFull : imagesMinimal;
+    const images = mapImagesFromShopifyProduct(product, ctx, columns.images);
 
-    const optionsMinimal = product.options.map((option) => ({
-      key: normalizeKey(option.name),
-      name: option.name,
-      values: option.values,
-    }));
-    const optionsFull = product.options.map((option) => ({
-      key: normalizeKey(option.name),
-      data: option.values.map(normalizeKey),
-      name: option.name,
-      position: option.position,
-      values: option.values,
-    }));
-    const mappedOptions =
-      columns.options === "full" ? optionsFull : optionsMinimal;
+    const mappedOptions = mapOptions(product.options, columns.options);
 
     const featuredImage = product.images?.[0]?.src
       ? ctx.normalizeImageUrl(product.images[0].src)
@@ -262,6 +341,7 @@ export function mapProductsDto<
         variantOptionsMap,
         variantPriceMap,
         variantSkuMap,
+        variantAvailabilityMap,
         url,
         slug,
         platformId: product.id.toString(),
@@ -299,6 +379,7 @@ export function mapProductsDto<
       variantOptionsMap,
       variantPriceMap,
       variantSkuMap,
+      variantAvailabilityMap,
       bodyHtml: product.body_html || null,
       active: true,
       productType: product.product_type || null,
@@ -344,60 +425,31 @@ export function mapProductDto<
 ): ProductResult<C, I, O> {
   const columns = resolveColumnsConfig<C, I, O>(options?.columns);
   const optionNames = product.options.map((o) => o.name);
-  const variantOptionsMap = buildVariantOptionsMap(
-    optionNames,
-    product.variants
-  );
-  const variantPriceMap = buildVariantPriceMap(optionNames, product.variants);
-  const variantSkuMap = buildVariantSkuMap(optionNames, product.variants);
+  const {
+    variantOptionsMap,
+    variantPriceMap,
+    variantSkuMap,
+    variantAvailabilityMap,
+  } = buildVariantMaps(optionNames, product.variants);
 
   const slug = genProductSlug({
     handle: product.handle,
     storeDomain: ctx.storeDomain,
   });
-  const url = product.url || `${ctx.storeDomain}/products/${product.handle}`;
+  const url = buildProductUrl(ctx, product.handle, product.url);
   const discount = calculateDiscount(
     product.price,
     product.compare_at_price || 0
   );
   const variantImages = buildVariantImagesMap(product, ctx);
 
-  const imagesMinimal = Array.isArray(product.images)
-    ? product.images.map((imageSrc) => ({
-        src: ctx.normalizeImageUrl(imageSrc),
-      }))
-    : [];
-  const imagesFull = Array.isArray(product.images)
-    ? product.images.map((imageSrc, index) => ({
-        id: index + 1,
-        productId: product.id,
-        alt: null,
-        position: index + 1,
-        src: ctx.normalizeImageUrl(imageSrc),
-        width: 0,
-        height: 0,
-        mediaType: "image" as const,
-        variantIds: [],
-        createdAt: product.created_at,
-        updatedAt: product.updated_at,
-      }))
-    : [];
-  const images = columns.images === "full" ? imagesFull : imagesMinimal;
+  const images = mapImagesFromShopifySingleProduct(
+    product,
+    ctx,
+    columns.images
+  );
 
-  const optionsMinimal = product.options.map((option) => ({
-    key: normalizeKey(option.name),
-    name: option.name,
-    values: option.values,
-  }));
-  const optionsFull = product.options.map((option) => ({
-    key: normalizeKey(option.name),
-    data: option.values.map(normalizeKey),
-    name: option.name,
-    position: option.position,
-    values: option.values,
-  }));
-  const mappedOptions =
-    columns.options === "full" ? optionsFull : optionsMinimal;
+  const mappedOptions = mapOptions(product.options, columns.options);
 
   const featuredImage = ctx.normalizeImageUrl(product.featured_image);
   if (columns.mode === "minimal") {
@@ -418,6 +470,7 @@ export function mapProductDto<
       variantOptionsMap,
       variantPriceMap,
       variantSkuMap,
+      variantAvailabilityMap,
       url,
       slug,
       platformId: product.id.toString(),
@@ -455,6 +508,7 @@ export function mapProductDto<
     variantOptionsMap,
     variantPriceMap,
     variantSkuMap,
+    variantAvailabilityMap,
     bodyHtml: product.description || null,
     active: true,
     productType: product.type || null,

@@ -161,6 +161,21 @@ function normalizeVariantToken(input: string): string {
   return normalizeKey(input).replace(/^_+|_+$/g, "");
 }
 
+function buildVariantKeyFromVariant(
+  optionNames: string[],
+  variant: {
+    option1: string | null;
+    option2: string | null;
+    option3: string | null;
+  }
+): string {
+  const obj: Record<string, string | null | undefined> = {};
+  if (optionNames[0]) obj[optionNames[0]] = variant.option1;
+  if (optionNames[1]) obj[optionNames[1]] = variant.option2;
+  if (optionNames[2]) obj[optionNames[2]] = variant.option3;
+  return buildVariantKey(obj);
+}
+
 /**
  * Build a map from normalized option combination → variant id strings.
  * Example key: `size__xl____color__blue`.
@@ -174,33 +189,15 @@ export function buildVariantOptionsMap(
     option3: string | null;
   }>
 ): Record<string, string> {
-  const keys = optionNames.map(normalizeVariantToken);
   const map: Record<string, string> = {};
 
   for (const v of variants) {
-    const parts: string[] = [];
-    if (keys[0] && v.option1)
-      parts.push(
-        `${keys[0]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option1)}`
-      );
-    if (keys[1] && v.option2)
-      parts.push(
-        `${keys[1]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option2)}`
-      );
-    if (keys[2] && v.option3)
-      parts.push(
-        `${keys[2]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option3)}`
-      );
+    const key = buildVariantKeyFromVariant(optionNames, v);
+    if (!key) continue;
 
-    if (parts.length > 0) {
-      // Ensure deterministic alphabetical ordering of parts
-      if (parts.length > 1) parts.sort();
-      const key = parts.join(VARIANT_PARTS_SEPARATOR);
-      const id = v.id.toString();
-      // First-write wins: do not override if key already exists
-      if (map[key] === undefined) {
-        map[key] = id;
-      }
+    const id = v.id.toString();
+    if (map[key] === undefined) {
+      map[key] = id;
     }
   }
 
@@ -226,31 +223,13 @@ export function buildVariantPriceMap(
     return 0;
   };
 
-  const keys = optionNames.map(normalizeVariantToken);
   const map: Record<string, number> = {};
 
   for (const v of variants) {
-    const parts: string[] = [];
-    if (keys[0] && v.option1)
-      parts.push(
-        `${keys[0]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option1)}`
-      );
-    if (keys[1] && v.option2)
-      parts.push(
-        `${keys[1]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option2)}`
-      );
-    if (keys[2] && v.option3)
-      parts.push(
-        `${keys[2]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option3)}`
-      );
+    const key = buildVariantKeyFromVariant(optionNames, v);
+    if (!key) continue;
 
-    if (parts.length > 0) {
-      if (parts.length > 1) parts.sort();
-      const key = parts.join(VARIANT_PARTS_SEPARATOR);
-      if (map[key] === undefined) {
-        map[key] = toCents(v.price);
-      }
-    }
+    if (map[key] === undefined) map[key] = toCents(v.price);
   }
 
   return map;
@@ -266,31 +245,37 @@ export function buildVariantSkuMap(
     sku: string | null;
   }>
 ): Record<string, string | null> {
-  const keys = optionNames.map(normalizeVariantToken);
   const map: Record<string, string | null> = {};
 
   for (const v of variants) {
-    const parts: string[] = [];
-    if (keys[0] && v.option1)
-      parts.push(
-        `${keys[0]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option1)}`
-      );
-    if (keys[1] && v.option2)
-      parts.push(
-        `${keys[1]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option2)}`
-      );
-    if (keys[2] && v.option3)
-      parts.push(
-        `${keys[2]}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(v.option3)}`
-      );
+    const key = buildVariantKeyFromVariant(optionNames, v);
+    if (!key) continue;
 
-    if (parts.length > 0) {
-      if (parts.length > 1) parts.sort();
-      const key = parts.join(VARIANT_PARTS_SEPARATOR);
-      if (map[key] === undefined) {
-        map[key] = typeof v.sku === "string" && v.sku.trim() ? v.sku : null;
-      }
-    }
+    if (map[key] === undefined)
+      map[key] = typeof v.sku === "string" && v.sku.trim() ? v.sku : null;
+  }
+
+  return map;
+}
+
+export function buildVariantAvailabilityMap(
+  optionNames: string[],
+  variants: Array<{
+    id: number;
+    option1: string | null;
+    option2: string | null;
+    option3: string | null;
+    available?: boolean | null;
+  }>
+): Record<string, boolean> {
+  const map: Record<string, boolean> = {};
+
+  for (const v of variants) {
+    const key = buildVariantKeyFromVariant(optionNames, v);
+    if (!key) continue;
+
+    if (map[key] === undefined)
+      map[key] = typeof v.available === "boolean" ? v.available : true;
   }
 
   return map;
@@ -310,8 +295,10 @@ export function buildVariantKey(
   const parts: string[] = [];
   for (const [name, value] of Object.entries(obj)) {
     if (value) {
+      const normalizedName = normalizeVariantToken(name);
+      if (!normalizedName) continue;
       parts.push(
-        `${normalizeVariantToken(name)}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(value)}`
+        `${normalizedName}${VARIANT_NAME_VALUE_SEPARATOR}${normalizeVariantToken(value)}`
       );
     }
   }
