@@ -27,7 +27,7 @@ describe("variantOptionsMap in product DTOs", () => {
         position: 1,
         product_id: 1,
         featured_image: null,
-        available: true,
+        available: false,
         price: "100",
         weightInGrams: undefined,
         compare_at_price: undefined,
@@ -104,6 +104,10 @@ describe("variantOptionsMap in product DTOs", () => {
     expect(mapped.variantSkuMap).toEqual({
       "color__blue____size__xl": "SKU-XL-BLUE",
       "color__red____size__xl": "SKU-XL-RED",
+    });
+    expect(mapped.variantAvailabilityMap).toEqual({
+      "color__blue____size__xl": false,
+      "color__red____size__xl": true,
     });
     expect(mapped.variantImages).toEqual({
       "1": ["https://example.com/img.jpg"],
@@ -203,6 +207,9 @@ describe("variantOptionsMap in product DTOs", () => {
     });
     expect(mapped.variantSkuMap).toEqual({
       "color__blue____material__cotton____size__m": "SKU-M-BLUE-COTTON",
+    });
+    expect(mapped.variantAvailabilityMap).toEqual({
+      "color__blue____material__cotton____size__m": true,
     });
     expect(mapped.variantImages).toEqual({
       "101": ["https://example.com/variant.jpg"],
