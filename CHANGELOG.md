@@ -1,3 +1,9 @@
+## [3.31.0](https://github.com/peppyhop/shop-client/compare/v3.30.0...v3.31.0) (2026-02-02)
+
+### Features
+
+* add Zod schemas module for type validation ([#53](https://github.com/peppyhop/shop-client/issues/53)) ([b5bbf7a](https://github.com/peppyhop/shop-client/commit/b5bbf7a3591b0b2d7e9a6b5d9c38b67dec924816))
+
 ## [3.30.0](https://github.com/peppyhop/shop-client/compare/v3.29.0...v3.30.0) (2026-01-28)
 
 ### Features
