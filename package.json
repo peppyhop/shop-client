@@ -41,6 +41,10 @@
     "./detect-country": {
       "import": "./dist/utils/detect-country.mjs",
       "types": "./dist/utils/detect-country.d.ts"
+    },
+    "./schemas": {
+      "import": "./dist/schemas.mjs",
+      "types": "./dist/schemas.d.ts"
     }
   },
   "sideEffects": false,
@@ -110,7 +114,8 @@
     "remeda": "^2.32.0",
     "tldts": "^7.0.7",
     "turndown": "^7.2.2",
-    "turndown-plugin-gfm": "^1.0.2"
+    "turndown-plugin-gfm": "^1.0.2",
+    "zod": "^4.0.0"
   },
   "lint-staged": {
     "src/**/!(*.test|*.spec).{ts,tsx,js,jsx}": [
