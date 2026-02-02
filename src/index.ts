@@ -819,6 +819,7 @@ export type { CheckoutOperations } from "./checkout";
 export type { CollectionOperations } from "./collections";
 // Export operation interfaces
 export type { ProductOperations } from "./products";
+export * as schemas from "./schemas";
 export type { OpenGraphMeta, ShopInfo, ShopOperations } from "./store";
 // Export selected types for external use (excluding Shopify-prefixed types)
 export type {

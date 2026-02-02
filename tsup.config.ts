@@ -11,6 +11,7 @@ export default defineConfig({
     "src/utils/func.ts",
     "src/utils/detect-country.ts",
     "src/ai/enrich.ts",
+    "src/schemas.ts",
   ],
   outDir: "dist",
   format: ["esm"],
