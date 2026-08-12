@@ -344,6 +344,7 @@ export function mapProductsDto<
         variantAvailabilityMap,
         url,
         slug,
+        handle: product.handle,
         platformId: product.id.toString(),
       };
       return {
@@ -473,6 +474,7 @@ export function mapProductDto<
       variantAvailabilityMap,
       url,
       slug,
+      handle: product.handle,
       platformId: product.id.toString(),
     };
     return {

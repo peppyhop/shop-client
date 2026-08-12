@@ -463,7 +463,21 @@ export type MinimalProduct = {
   variantAvailabilityMap: Record<string, boolean>;
   url: string;
   slug: string;
+  handle: string;
   platformId: string;
+};
+
+/**
+ * Raw identity/version tuple for a product, used for change detection.
+ *
+ * Fields are passed through verbatim from `/products.json` rather than
+ * normalized, so consumers diffing against a previous crawl compare exactly
+ * what Shopify reported.
+ */
+export type ProductFingerprint = {
+  handle: string;
+  id: number;
+  updated_at: string;
 };
 
 export type ProductColumnsMode = "minimal" | "full";
