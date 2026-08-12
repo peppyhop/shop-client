@@ -117,13 +117,13 @@ Shared utility functions support consistent normalization and parsing across mod
 
 #### Rate Limiting
 
-All internal HTTP requests are funneled through a global, opt-in rate limiter:
+All internal HTTP requests are funneled through a global, on-by-default rate limiter:
 
 - API: `configureRateLimit({ enabled, maxRequestsPerInterval, intervalMs, maxConcurrency, perHost, perClass })`
 - Mechanism: token-bucket refill per interval plus concurrency gating
 - Scope: products, collections, store info, and enrichment use `rateLimitedFetch`
-- Defaults (when enabled): 5 requests per 1000ms, max concurrency 5
-- Disabled by default; enable once at application startup
+- Defaults: 5 requests per 1000ms, max concurrency 5
+- Enabled by default; reconfigure or disable once at application startup
 
 Buckets:
 - Per-host buckets via `perHost` support exact hosts and wildcard suffix (e.g., `*.myshopify.com`).
