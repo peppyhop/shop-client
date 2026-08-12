@@ -1,4 +1,8 @@
-import { getInfoForShop, getSeoForUrl } from "./client/get-info";
+import {
+  getInfoForShop,
+  getSeoForUrl,
+  toJsonLdEntries,
+} from "./client/get-info";
 import type {
   CountryDetectionResult,
   CurrencyCode,
@@ -280,14 +284,16 @@ export function createShopOperations(context: {
             match.replace(/^.*?>/, "").replace(/<\/script>$/i, "")
           );
         const jsonLdData: JsonLdEntry[] | undefined = jsonLd
-          ?.map((json) => {
-            try {
-              return JSON.parse(json) as JsonLdEntry;
-            } catch {
-              return undefined;
-            }
-          })
-          .filter((x): x is JsonLdEntry => !!x);
+          ? toJsonLdEntries(
+              jsonLd.map((json) => {
+                try {
+                  return JSON.parse(json) as unknown;
+                } catch {
+                  return undefined;
+                }
+              })
+            )
+          : undefined;
 
         const headerLinks =
           html

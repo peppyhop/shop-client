@@ -9,6 +9,23 @@ import {
 } from "../utils/func";
 import { rateLimitedFetch } from "../utils/rate-limit";
 
+/**
+ * Normalizes parsed JSON-LD values into a flat list of object entries.
+ *
+ * A single `ld+json` block may hold a top-level array (`[{...},{...}]`), which
+ * is valid and common; those are flattened one level so each descriptor
+ * surfaces as its own entry rather than being dropped or nested. Non-object
+ * values (strings, numbers, null) carry no descriptor and are discarded.
+ */
+export function toJsonLdEntries(values: readonly unknown[]): JsonLdEntry[] {
+  return values
+    .flatMap((entry) => (Array.isArray(entry) ? entry : [entry]))
+    .filter(
+      (entry): entry is JsonLdEntry =>
+        typeof entry === "object" && entry !== null && !Array.isArray(entry)
+    );
+}
+
 function parseSeoFromHtml(html: string, url: string): EnhancedProductSeo {
   const esc = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const getMeta = (key: string) => {
@@ -427,10 +444,7 @@ export async function getInfoForShop(
     // Reuse the blocks already parsed by parseSeoFromHtml: it tolerates
     // malformed LD+JSON and its regex handles multi-line/nested blocks that
     // a `[^<]+` character class would truncate.
-    jsonLdData: seo.jsonLdRaw.filter(
-      (entry): entry is JsonLdEntry =>
-        typeof entry === "object" && entry !== null && !Array.isArray(entry)
-    ),
+    jsonLdData: toJsonLdEntries(seo.jsonLdRaw),
     seo,
     techProvider: {
       name: shopifyWalletId ? "shopify" : "",
