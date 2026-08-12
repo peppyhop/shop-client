@@ -831,6 +831,7 @@ export type {
   MetaTag,
   OpenRouterConfig,
   Product,
+  ProductFingerprint,
   ProductImage,
   ProductOption,
   ProductVariant,
