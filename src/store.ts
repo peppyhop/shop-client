@@ -270,17 +270,24 @@ export function createShopOperations(context: {
             ),
           ]);
 
+        // Malformed LD+JSON on a merchant homepage must not fail the whole
+        // fetch; skip unparseable blocks the same way `getJsonLd` does.
         const jsonLd = html
           .match(
-            /<script[^>]*type="application\/ld\+json"[^>]*>([^<]+)<\/script>/g
+            /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g
           )
-          ?.map((match) => {
-            const afterGt = match.split(">")[1];
-            return afterGt ? afterGt.replace(/<\/script/g, "") : "";
-          });
-        const jsonLdData: JsonLdEntry[] | undefined = jsonLd?.map(
-          (json) => JSON.parse(json) as JsonLdEntry
-        );
+          ?.map((match) =>
+            match.replace(/^.*?>/, "").replace(/<\/script>$/i, "")
+          );
+        const jsonLdData: JsonLdEntry[] | undefined = jsonLd
+          ?.map((json) => {
+            try {
+              return JSON.parse(json) as JsonLdEntry;
+            } catch {
+              return undefined;
+            }
+          })
+          .filter((x): x is JsonLdEntry => !!x);
 
         const headerLinks =
           html
