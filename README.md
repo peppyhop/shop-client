@@ -251,16 +251,16 @@ Notes:
 
 ## Rate Limiting
 
-`shop-client` ships with an opt-in, global rate limiter that transparently throttles all internal HTTP requests (products, collections, store info, enrichment). This helps avoid `429 Too Many Requests` responses and keeps crawling stable.
+`shop-client` ships with a global rate limiter that transparently throttles all internal HTTP requests (products, collections, store info, enrichment). This helps avoid `429 Too Many Requests` responses and keeps crawling stable.
 
-- Default: disabled
-- When enabled: defaults to `5` requests per `1000ms` with max concurrency `5`
-- Configure globally via `configureRateLimit`
+- Default: **enabled**, at `5` requests per `1000ms` with max concurrency `5`
+- Configure globally via `configureRateLimit` — including `enabled: false` to turn it off
+- High-throughput consumers should raise the limits or disable it explicitly; the defaults are deliberately conservative
 
 ```typescript
 import { ShopClient, configureRateLimit } from 'shop-client';
 
-// Enable and configure the global rate limiter
+// Reconfigure the global rate limiter
 configureRateLimit({
   enabled: true,
   maxRequestsPerInterval: 60, // 60 requests
@@ -276,6 +276,7 @@ const products = await shop.products.all();
 
 Notes:
 - The limiter is global to the process. Call `configureRateLimit` once at startup.
+- Because it is on by default, requests are throttled to `5/s` unless you opt out.
 - If you are crawling multiple stores, prefer lower concurrency and a longer interval to reduce pressure.
 - When disabled, the library uses native `fetch` without throttling.
 

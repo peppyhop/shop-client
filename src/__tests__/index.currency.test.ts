@@ -458,7 +458,9 @@ describe("Currency propagation and formatting", () => {
     expect(product).not.toBeNull();
     if (!product) return;
 
-    expect("handle" in product).toBe(false);
+    // `vendor` is full-mode only; `handle` is present in both modes.
+    expect("vendor" in product).toBe(false);
+    expect("handle" in product).toBe(true);
     const p = product as MinimalProduct;
     const expectedFormatted = new Intl.NumberFormat(undefined, {
       style: "currency",
@@ -482,7 +484,9 @@ describe("Currency propagation and formatting", () => {
     const ps = products as MinimalProduct[];
     expect(ps.length).toBe(2);
     for (const p of ps) {
-      expect("handle" in (p as unknown as Record<string, unknown>)).toBe(false);
+      // `vendor` is full-mode only; `handle` is present in both modes.
+      expect("vendor" in (p as unknown as Record<string, unknown>)).toBe(false);
+      expect("handle" in (p as unknown as Record<string, unknown>)).toBe(true);
       expect(p.localizedPricing).toBeDefined();
     }
 
@@ -508,7 +512,9 @@ describe("Currency propagation and formatting", () => {
     const ps = products as MinimalProduct[];
     expect(ps.length).toBe(2);
     for (const p of ps) {
-      expect("handle" in (p as unknown as Record<string, unknown>)).toBe(false);
+      // `vendor` is full-mode only; `handle` is present in both modes.
+      expect("vendor" in (p as unknown as Record<string, unknown>)).toBe(false);
+      expect("handle" in (p as unknown as Record<string, unknown>)).toBe(true);
       expect(p.localizedPricing).toBeDefined();
     }
 

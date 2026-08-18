@@ -670,11 +670,22 @@ export const minimalProductSchema = z.object({
   variantAvailabilityMap: z.record(z.string(), z.boolean()),
   url: z.string(),
   slug: z.string(),
+  handle: z.string(),
   platformId: z.string(),
 });
 export type MinimalProduct = z.infer<typeof minimalProductSchema>;
 type _MinimalProductMatches = Assert<
   IsEqual<MinimalProduct, Types.MinimalProduct>
+>;
+
+export const productFingerprintSchema = z.object({
+  handle: z.string(),
+  id: z.number(),
+  updated_at: z.string(),
+});
+export type ProductFingerprint = z.infer<typeof productFingerprintSchema>;
+type _ProductFingerprintMatches = Assert<
+  IsEqual<ProductFingerprint, Types.ProductFingerprint>
 >;
 
 export const productColumnsModeSchema = z.enum(["minimal", "full"]);

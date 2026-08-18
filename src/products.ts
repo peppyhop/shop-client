@@ -12,6 +12,7 @@ import type {
   ProductClassification,
   ProductColumnsConfig,
   ProductColumnsMode,
+  ProductFingerprint,
   ProductImagesMode,
   ProductOptionsMode,
   ProductResult,
@@ -38,6 +39,11 @@ export interface ProductOperations {
     currency?: CurrencyCode;
     columns?: ProductColumnsConfig<C, I, O>;
   }): Promise<ProductResult<C, I, O>[] | null>;
+
+  /**
+   * Fetches identity/version tuples for every product in the store.
+   */
+  fingerprints(): Promise<ProductFingerprint[]>;
 
   /**
    * Fetches products with pagination support.
@@ -372,6 +378,55 @@ export function createProductOperations(
       return maybeOverrideProductsCurrency(products, options.currency);
     } catch (error) {
       console.error("Failed to fetch all products:", storeDomain, error);
+      throw error;
+    }
+  }
+
+  async function fingerprintsInternal(): Promise<ProductFingerprint[]> {
+    const limit = 250;
+    const fingerprints: ProductFingerprint[] = [];
+
+    async function fetchAll() {
+      let currentPage = 1;
+
+      while (true) {
+        const url = `${baseUrl}products.json?limit=${limit}&page=${currentPage}`;
+        const response = await rateLimitedFetch(url, {
+          rateLimitClass: "products:list",
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = (await response.json()) as { products: ShopifyProduct[] };
+        const rawProducts = Array.isArray(data.products) ? data.products : [];
+
+        // Unlike `all()`, gift cards are NOT filtered out here: fingerprints
+        // describe the store as Shopify reports it, so a consumer's count and
+        // diff line up with the raw catalog rather than with our own view of it.
+        for (const p of rawProducts) {
+          fingerprints.push({
+            handle: p.handle,
+            id: p.id,
+            updated_at: p.updated_at,
+          });
+        }
+
+        if (rawProducts.length === 0 || rawProducts.length < limit) {
+          break;
+        }
+        currentPage++;
+      }
+      return fingerprints;
+    }
+
+    try {
+      return await fetchAll();
+    } catch (error) {
+      console.error(
+        "Failed to fetch product fingerprints:",
+        storeDomain,
+        error
+      );
       throw error;
     }
   }
@@ -838,6 +893,35 @@ export function createProductOperations(
         columns: options?.columns,
       });
       return res;
+    },
+
+    /**
+     * Fetches identity/version tuples for every product in the store.
+     *
+     * Walks the same paginated `/products.json` feed as {@link all}, but skips
+     * normalization entirely and returns the raw `handle`, `id` and
+     * `updated_at` for each product. Intended for change detection: compare
+     * against a previous crawl to find which products need a full refetch.
+     *
+     * Gift cards are included, unlike {@link all}, so the returned count and
+     * handles match the store's raw catalog rather than the filtered view.
+     *
+     * @returns {Promise<ProductFingerprint[]>} One entry per product, in feed order
+     *
+     * @throws {Error} When there's a network error or API failure
+     *
+     * @example
+     * ```typescript
+     * const shop = new ShopClient('https://example.myshopify.com');
+     *
+     * const current = await shop.products.fingerprints();
+     * const changed = current.filter(
+     *   (p) => previous.get(p.handle) !== p.updated_at
+     * );
+     * ```
+     */
+    fingerprints: async (): Promise<ProductFingerprint[]> => {
+      return await fingerprintsInternal();
     },
 
     /**
