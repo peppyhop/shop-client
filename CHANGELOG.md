@@ -1,3 +1,9 @@
+## [3.32.0](https://github.com/peppyhop/shop-client/compare/v3.31.0...v3.32.0) (2026-08-18)
+
+### Features
+
+* handle on MinimalProduct, products.fingerprints(), JSON-LD parse hardening ([#54](https://github.com/peppyhop/shop-client/issues/54)) ([9420b42](https://github.com/peppyhop/shop-client/commit/9420b42b33cfbbb64934e22d3b344d81db5432a7))
+
 ## [3.31.0](https://github.com/peppyhop/shop-client/compare/v3.30.0...v3.31.0) (2026-02-02)
 
 ### Features
